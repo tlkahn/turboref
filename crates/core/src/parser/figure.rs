@@ -3,11 +3,22 @@ use std::sync::LazyLock;
 
 use crate::config::DocumentConfig;
 use crate::types::{Definition, RefNumber, RefType};
-use super::{Counters, DefinitionParser};
+use super::{Counters, DefinitionParser, PendingFigure};
 use super::scan::ScanContext;
 
+// Same-line: ![desc](src){#fig:id} or ![desc](src) {#fig:id}
 static IMAGE_WITH_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"!\[(.*?)\]\((.*?)\)\{#fig:([^}]+)\}").unwrap()
+    Regex::new(r"!\[(.*?)\]\((.*?)\)\s*\{#fig:([^}]+)\}").unwrap()
+});
+
+// Image without inline tag (no {#fig:...} on the line)
+static IMAGE_NO_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^!\[(.*?)\]\((.*?)\)\s*$").unwrap()
+});
+
+// Next-line standalone tag: {#fig:id}
+static FIG_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*\{#fig:([^}]+)\}\s*$").unwrap()
 });
 
 static SUBFIG_OPEN_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -57,11 +68,45 @@ impl DefinitionParser for FigureParser {
     ) -> Vec<Definition> {
         // Skip inside code or math blocks
         if ctx.in_code_block || ctx.in_math_block {
+            counters.pending_fig = PendingFigure::default();
             return Vec::new();
         }
 
         let trimmed = line.trim();
         let mut defs = Vec::new();
+
+        // 0. Check if previous line had a pending image and this line has {#fig:id}
+        if counters.pending_fig.active {
+            let pending = std::mem::take(&mut counters.pending_fig);
+            if let Some(caps) = FIG_TAG_RE.captures(trimmed) {
+                let id = caps[1].trim().to_string();
+
+                if counters.sub_fig.active {
+                    counters.sub_fig.current_count += 1;
+                    let letter = (b'a' + (counters.sub_fig.current_count - 1) as u8) as char;
+                    defs.push(Definition {
+                        ref_type: RefType::Fig,
+                        id,
+                        number: RefNumber::SubNumbered(counters.sub_fig.main_number, letter),
+                        caption: Some(pending.description),
+                        line: pending.line,
+                        char_offset: pending.char_offset,
+                    });
+                } else {
+                    counters.fig_count += 1;
+                    defs.push(Definition {
+                        ref_type: RefType::Fig,
+                        id,
+                        number: RefNumber::Simple(counters.fig_count),
+                        caption: Some(pending.description),
+                        line: pending.line,
+                        char_offset: pending.char_offset,
+                    });
+                }
+                return defs;
+            }
+            // No tag on this line — pending image had no definition, move on
+        }
 
         // 1. Check for sub-figure block open: <div id="fig:...">
         if let Some(caps) = SUBFIG_OPEN_RE.captures(trimmed) {
@@ -98,7 +143,7 @@ impl DefinitionParser for FigureParser {
             counters.sub_fig.accumulated_lines.push(line.to_string());
         }
 
-        // 4. Check for image with tag: ![desc](src){#fig:id}
+        // 4. Check for image with inline tag: ![desc](src){#fig:id}
         if let Some(caps) = IMAGE_WITH_TAG_RE.captures(line) {
             let description = caps[1].to_string();
             let id = caps[3].to_string();
@@ -125,6 +170,18 @@ impl DefinitionParser for FigureParser {
                     char_offset,
                 });
             }
+            return defs;
+        }
+
+        // 5. Image without tag — store as pending for next-line tag check
+        if let Some(caps) = IMAGE_NO_TAG_RE.captures(line) {
+            let description = caps[1].to_string();
+            counters.pending_fig = PendingFigure {
+                active: true,
+                description,
+                line: line_idx,
+                char_offset,
+            };
         }
 
         defs
@@ -235,7 +292,6 @@ Some text line\n\
 The actual caption\n\
 </div>";
         let defs = parse_figures(content);
-        // Main figure caption should be "The actual caption" (last non-image, non-div, non-empty line)
         let main_def = defs.iter().find(|d| d.id == "main").unwrap();
         assert_eq!(main_def.caption, Some("The actual caption".to_string()));
     }
@@ -271,7 +327,6 @@ The actual caption\n\
 Four images\n\
 </div>";
         let defs = parse_figures(content);
-        // 4 sub-figures + 1 main = 5
         assert_eq!(defs.len(), 5);
         assert_eq!(defs[0].number, RefNumber::SubNumbered(1, 'a'));
         assert_eq!(defs[1].number, RefNumber::SubNumbered(1, 'b'));
@@ -287,5 +342,77 @@ Four images\n\
         assert_eq!(defs[0].id, "zh1");
         assert_eq!(defs[0].caption, Some("图片描述".to_string()));
         assert_eq!(defs[0].number, RefNumber::Simple(1));
+    }
+
+    #[test]
+    fn parse_figure_with_space_before_tag() {
+        let defs = parse_figures("![Sunset](sunset.png) {#fig:sunset}");
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "sunset");
+        assert_eq!(defs[0].number, RefNumber::Simple(1));
+    }
+
+    #[test]
+    fn parse_figure_with_multiple_spaces_before_tag() {
+        let defs = parse_figures("![Sunset](sunset.png)   {#fig:sunset}");
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "sunset");
+    }
+
+    #[test]
+    fn parse_figure_with_tab_before_tag() {
+        let defs = parse_figures("![Sunset](sunset.png)\t{#fig:sunset}");
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "sunset");
+    }
+
+    // --- Next-line tag tests ---
+
+    #[test]
+    fn parse_figure_next_line_tag() {
+        let content = "![A sunset](sunset.png)\n{#fig:sunset}";
+        let defs = parse_figures(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "sunset");
+        assert_eq!(defs[0].number, RefNumber::Simple(1));
+        assert_eq!(defs[0].caption, Some("A sunset".to_string()));
+    }
+
+    #[test]
+    fn parse_figure_next_line_tag_with_indent() {
+        let content = "![A sunset](sunset.png)\n  {#fig:sunset}";
+        let defs = parse_figures(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "sunset");
+    }
+
+    #[test]
+    fn parse_figure_next_line_blank_line_no_match() {
+        // Blank line between image and tag — should NOT match
+        let content = "![A sunset](sunset.png)\n\n{#fig:sunset}";
+        let defs = parse_figures(content);
+        assert_eq!(defs.len(), 0);
+    }
+
+    #[test]
+    fn parse_figure_next_line_numbering() {
+        let content = "\
+![First](a.png){#fig:first}\n\
+![Second](b.png)\n\
+{#fig:second}\n\
+![Third](c.png){#fig:third}";
+        let defs = parse_figures(content);
+        assert_eq!(defs.len(), 3);
+        assert_eq!(defs[0].number, RefNumber::Simple(1));
+        assert_eq!(defs[1].number, RefNumber::Simple(2));
+        assert_eq!(defs[2].number, RefNumber::Simple(3));
+    }
+
+    #[test]
+    fn parse_figure_next_line_image_without_following_tag() {
+        // Image without tag, followed by non-tag text — no definition
+        let content = "![No tag](img.png)\nJust regular text";
+        let defs = parse_figures(content);
+        assert_eq!(defs.len(), 0);
     }
 }

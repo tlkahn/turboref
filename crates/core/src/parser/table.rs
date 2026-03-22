@@ -7,7 +7,7 @@ use super::{Counters, DefinitionParser};
 use super::scan::ScanContext;
 
 static TABLE_CAPTION_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^:(.*?)\{#tbl:([^}]+)\}\s*$").unwrap()
+    Regex::new(r"^:(.*?)\s*\{#tbl:([^}]+)\}\s*$").unwrap()
 });
 
 pub struct TableParser;
@@ -129,5 +129,13 @@ mod tests {
         let defs = parse_tables(": Caption {#tbl:trail}  ");
         assert_eq!(defs.len(), 1);
         assert_eq!(defs[0].id, "trail");
+    }
+
+    #[test]
+    fn parse_table_with_space_before_tag() {
+        let defs = parse_tables(": Caption  {#tbl:spaced}");
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "spaced");
+        assert_eq!(defs[0].caption, Some("Caption".to_string()));
     }
 }

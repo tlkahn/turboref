@@ -19,6 +19,15 @@ pub struct SubFigState {
     pub accumulated_lines: Vec<String>,
 }
 
+/// Pending image awaiting a next-line `{#fig:id}` tag.
+#[derive(Debug, Default, Clone)]
+pub struct PendingFigure {
+    pub active: bool,
+    pub description: String,
+    pub line: usize,
+    pub char_offset: usize,
+}
+
 /// Mutable counters shared across parsers during a single-pass scan.
 #[derive(Debug, Default)]
 pub struct Counters {
@@ -28,6 +37,7 @@ pub struct Counters {
     pub lst_count: u32,
     pub sec_levels: [u32; 6],
     pub sub_fig: SubFigState,
+    pub pending_fig: PendingFigure,
 }
 
 /// Trait for definition parsers. Each reference type implements this.
