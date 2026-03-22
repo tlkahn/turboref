@@ -19,13 +19,29 @@ pub struct SubFigState {
     pub accumulated_lines: Vec<String>,
 }
 
-/// Pending image awaiting a next-line `{#fig:id}` tag.
+/// Pending image awaiting a next-line `{#fig:id}` tag (used inside `<div>` blocks).
 #[derive(Debug, Default, Clone)]
 pub struct PendingFigure {
     pub active: bool,
     pub description: String,
     pub line: usize,
     pub char_offset: usize,
+}
+
+/// A single image line waiting to be finalized (used outside `<div>` blocks).
+#[derive(Debug, Clone)]
+pub struct PendingImage {
+    pub description: String,
+    pub id: Option<String>,
+    pub line: usize,
+    pub char_offset: usize,
+}
+
+/// Accumulates consecutive image lines for caption-based sub-figure detection.
+#[derive(Debug, Default, Clone)]
+pub struct ImageAccumulator {
+    pub images: Vec<PendingImage>,
+    pub awaiting_tag: bool,
 }
 
 /// Mutable counters shared across parsers during a single-pass scan.
@@ -38,6 +54,7 @@ pub struct Counters {
     pub sec_levels: [u32; 6],
     pub sub_fig: SubFigState,
     pub pending_fig: PendingFigure,
+    pub image_acc: ImageAccumulator,
 }
 
 /// Trait for definition parsers. Each reference type implements this.
@@ -58,6 +75,11 @@ pub trait DefinitionParser: Send + Sync {
         counters: &mut Counters,
         config: &DocumentConfig,
     ) -> Vec<Definition>;
+
+    /// Called after all lines have been processed. Flush any pending state.
+    fn on_end(&self, _counters: &mut Counters) -> Vec<Definition> {
+        Vec::new()
+    }
 }
 
 /// Registry holding all active parsers.

@@ -173,6 +173,12 @@ pub fn scan_document(
         ctx.prev_line_closed_code = false;
     }
 
+    // Flush any pending state at end of document
+    for parser in registry.parsers() {
+        let defs = parser.on_end(&mut counters);
+        definitions.extend(defs);
+    }
+
     definitions
 }
 
