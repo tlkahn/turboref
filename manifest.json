@@ -1,0 +1,10 @@
+{
+  "id": "turboref",
+  "name": "TurboRef",
+  "version": "0.1.0",
+  "minAppVersion": "0.15.0",
+  "description": "Pandoc-crossref compatible cross-referencing for figures, tables, sections, equations, and code listings",
+  "author": "",
+  "authorUrl": "",
+  "isDesktopOnly": true
+}

@@ -1,0 +1,23 @@
+# Rust
+/target/
+crates/wasm/pkg/
+
+# Node
+node_modules/
+main.js
+*.js.map
+
+# WASM build output
+*.wasm
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Obsidian
+data.json
