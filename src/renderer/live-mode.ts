@@ -55,7 +55,9 @@ function createDecorationExtension(plugin: TurboRefPlugin): Extension {
                     widget: new CrossrefWidget(
                         citation.original,
                         citation.rendered_text,
-                        citation.is_valid
+                        citation.is_valid,
+                        start,
+                        end
                     ),
                 });
 

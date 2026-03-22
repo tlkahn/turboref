@@ -320,6 +320,8 @@ CodeMirror 6 `EditorView.decorations.compute(["doc", "selection"])`:
 3. `Decoration.replace` with `CrossrefWidget` for each citation
 4. Invalid citations styled with strikethrough + error color
 
+**Click-to-edit on widgets**: `Decoration.replace` widgets swallow mouse events — CM6 does not place the cursor inside a replaced range on click (arrow keys work because they traverse positions sequentially). The fix is to handle `mousedown` directly on the widget DOM element (`widgets.ts:toDOM()`), calling `preventDefault()` + `stopPropagation()` to block CM6's default handling, then using `setTimeout(0)` to dispatch a `view.dispatch({ selection: { anchor: charStart } })` after CM6's event cycle settles. The `EditorView` is available via the `toDOM(view)` parameter. `EditorView.domEventHandlers` does **not** work for this because the replace widget intercepts the event before it reaches the handler.
+
 ### Suggest (`suggest.ts`)
 
 Obsidian `EditorSuggest`, triggered by `[@`:
@@ -338,7 +340,7 @@ Obsidian `EditorSuggest`, triggered by `[@`:
 
 ```bash
 # package.json scripts
-"build:wasm":  "wasm-pack build crates/wasm --target bundler --release"
+"build:wasm":  "wasm-pack build crates/wasm --target web --release"
 "build:ts":    "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
 "build":       "npm run build:wasm && npm run build:ts"
 "dev:wasm":    "cargo watch -w crates -s 'npm run build:wasm'"
@@ -350,6 +352,10 @@ Obsidian `EditorSuggest`, triggered by `[@`:
 **Output**: `main.js` + `manifest.json` + `styles.css` + `turboref_wasm_bg.wasm`
 
 **WASM shipping**: Separate `.wasm` file in the Obsidian plugin directory. Not base64-embedded — keeps `main.js` lean.
+
+**WASM target**: Must use `--target web` (not `bundler`). The `web` target generates `initSync({ module: wasmBinary })` which accepts a `BufferSource` directly — the plugin reads the `.wasm` binary from disk via Obsidian's `FileSystemAdapter.readBinary()` and passes it to `initSync`. The `bundler` target generates different glue code that doesn't expose the right initialization API.
+
+**wasm-opt**: The wasm-pack bundled `wasm-opt` may not support all platforms (e.g., Apple Silicon). Set `wasm-opt = false` in `[package.metadata.wasm-pack.profile.release]` and run the system `wasm-opt` (via binaryen) separately. `-Oz` typically shrinks the binary ~23% (1.3MB → 1.0MB).
 
 ---
 
