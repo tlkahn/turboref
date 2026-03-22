@@ -1,0 +1,98 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+TurboRef is an Obsidian plugin for pandoc-crossref-compatible cross-referencing. It has a **Rust/WASM core** for all parsing and resolution logic, and a **TypeScript UI layer** for Obsidian integration.
+
+Supports 5 reference types: `fig`, `tbl`, `sec`, `eq`, `lst` — plus trait-based extensibility for custom types.
+
+## Build Commands
+
+```bash
+cargo test -p turboref-core          # Run all 98 Rust unit tests
+wasm-pack build crates/wasm --target web --release   # Build WASM
+node esbuild.config.mjs production   # Bundle TypeScript
+./install.sh                         # Full build + install to Obsidian vault
+./install.sh /path/to/vault          # Install to specific vault
+```
+
+## Architecture
+
+Two-crate Rust workspace + TypeScript:
+
+- **`crates/core`** — Pure Rust library (zero WASM deps). All parsing, numbering, citation resolution, rendering, template expansion. This is the TDD target.
+- **`crates/wasm`** — Thin `wasm-bindgen` wrapper. Exports 4 functions, JSON in/out.
+- **`src/`** — TypeScript. Obsidian plugin lifecycle, CodeMirror 6 live rendering, MarkdownPostProcessor for reading mode, EditorSuggest for `[@` completion, image/table event listeners, settings UI.
+
+### Data Flow
+
+```
+Document content + config JSON
+  → [WASM] scan_document() — single-pass line scanner with ScanContext
+    → each DefinitionParser::on_line() emits Definitions
+  → [WASM] scan_citations() — finds [@...] patterns with UTF-16 offsets
+  → [WASM] resolve_all() — looks up definitions, renders batch/ranges
+  → [TS] applies results to DOM (reading mode) or CodeMirror decorations (live mode)
+```
+
+### Key Design Decisions
+
+- **WASM boundary is stateless JSON**: each call takes full `(content, config_json)`, returns JSON. TS side caches if needed.
+- **`--target web`** for wasm-pack: generates `initSync()` which takes a `BufferSource` directly. Loaded via `FileSystemAdapter.readBinary()`.
+- **UTF-16 offsets** in all position data — matches CodeMirror 6's internal model.
+- **`getrandom` with `js` feature** in the wasm crate for `rand` support on WASM targets.
+- **`wasm-opt = false`** in Cargo.toml (wasm-pack's bundled binary doesn't support Apple Silicon). System `wasm-opt` run separately in `install.sh`.
+
+### Parser Extensibility
+
+New reference types implement `DefinitionParser` trait in `crates/core/src/parser/`:
+
+```rust
+pub trait DefinitionParser: Send + Sync {
+    fn ref_type(&self) -> RefType;
+    fn prefix_str(&self) -> &str;
+    fn on_line(&self, line, line_idx, char_offset, ctx, counters, config) -> Vec<Definition>;
+}
+```
+
+Register in `ParserRegistry::with_builtins()` in `parser/mod.rs`.
+
+### Scanner Context Flags
+
+Parsers check `ScanContext` to avoid false matches:
+- `in_code_block` — inside fenced code (``` or ~~~)
+- `in_math_block` — inside display math (`$$` on its own line)
+- `prev_line_closed_math` — equation parser checks this for next-line `{#eq:id}` tags
+- `prev_line_closed_code` — listing parser checks this for next-line `{#lst:id}` tags
+
+## File Layout
+
+```
+crates/core/src/
+  parser/          # DefinitionParser trait + 5 parsers (figure, table, section, equation, listing)
+    scan.rs        # ScanContext + single-pass scanner
+  citation.rs      # [@...] pattern scanning with UTF-16 offsets
+  renderer.rs      # Citation → rendered text (batch, range, prefix selection)
+  resolver.rs      # ReferenceMap (id → Definition lookup)
+  template.rs      # {tag:n}, {filename}, {index}, {ext} expansion
+  document.rs      # Orchestrator: parse → resolve → render
+  config.rs        # DocumentConfig (merged from settings + frontmatter)
+  types.rs         # RefType, RefNumber, Definition, Citation, ResolvedCitation
+  i18n.rs          # Locale-specific defaults (en, zh)
+
+src/
+  main.ts          # Plugin entry, wires all components
+  bridge.ts        # WASM loader (initSync) + typed wrappers
+  config.ts        # PluginSettings, buildDocumentConfigJson()
+  suggest.ts       # EditorSuggest for [@... autocompletion
+  settings.ts      # Settings UI tab
+  renderer/
+    reading-mode.ts  # MarkdownPostProcessor
+    live-mode.ts     # CodeMirror 6 decorations
+    widgets.ts       # CrossrefWidget
+  listeners/
+    image.ts       # Paste/drop → auto {#fig:id}
+    table.ts       # Table detection → auto caption
+```
