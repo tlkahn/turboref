@@ -20,7 +20,32 @@ A pandoc-crossref-compatible Obsidian plugin with a Rust/WASM core and TypeScrip
 | Equation | `eq` | `$$...$${#eq:id}` or `$$\n...\n$$\n{#eq:id}` | `[@eq:id]` | "Eq. 1" |
 | Listing | `lst` | `` ```\n...\n```\n{#lst:id} `` | `[@lst:id]` | "Listing 1" |
 
-### Sub-figures
+### Figure Tag Placement
+
+Tags can be on the same line (with optional whitespace) or the next line:
+```markdown
+![Cat](cat.png){#fig:cat}
+![Dog](dog.png) {#fig:dog}
+![Bird](bird.png)
+{#fig:bird}
+```
+
+### Sub-figures (Caption Syntax — Recommended)
+
+Consecutive images followed by `: Caption {#fig:id}` form a sub-figure group:
+
+```markdown
+![Cat](cat.png){#fig:cat}
+![Dog](dog.png){#fig:dog}
+: Domestic animals {#fig:animals}
+```
+`[@fig:cat]` → "Fig. 1a", `[@fig:dog]` → "Fig. 1b", `[@fig:animals]` → "Fig. 1"
+
+A blank line or non-image text breaks the group. Images without `{#fig:id}` consume a sub-letter but emit no definition.
+
+### Sub-figures (HTML Div Syntax — Pandoc Export)
+
+For pandoc-crossref compatibility (not rendered natively by Obsidian):
 
 ```markdown
 <div id="fig:main">
@@ -29,7 +54,6 @@ A pandoc-crossref-compatible Obsidian plugin with a Rust/WASM core and TypeScrip
 Main caption
 </div>
 ```
-`[@fig:cat]` → "Figure 1a", `[@fig:main]` → "Figure 1"
 
 ### Equation Tag Styles
 
@@ -183,18 +207,12 @@ pub struct ResolvedCitation {
 pub trait DefinitionParser: Send + Sync {
     fn ref_type(&self) -> RefType;
     fn prefix_str(&self) -> &str;
-
-    fn on_line(
-        &self,
-        line: &str,
-        line_idx: usize,
-        char_offset: usize,
-        ctx: &ScanContext,
-        counters: &mut Counters,
-        config: &DocumentConfig,
-    ) -> Vec<Definition>;
+    fn on_line(&self, line, line_idx, char_offset, ctx, counters, config) -> Vec<Definition>;
+    fn on_end(&self, counters: &mut Counters) -> Vec<Definition> { Vec::new() }
 }
 ```
+
+`on_end()` is called after all lines are processed — parsers flush pending state (e.g., the figure parser's image accumulator emits remaining standalone figures at EOF).
 
 A `ParserRegistry` stores `Vec<Box<dyn DefinitionParser>>`. The built-in 5 types are always registered. Custom types can be added via `registry.register(parser)`.
 

@@ -11,7 +11,7 @@ Built with a **Rust/WASM core** for fast, reliable parsing and a TypeScript UI l
 - **Reading mode rendering**: full cross-reference resolution in preview
 - **Auto-completion**: type `[@` to get suggestions for all defined references
 - **Batch references**: `[@fig:a;@fig:b;@fig:c]` renders as "Figs. 1-3" (consecutive range detection)
-- **Sub-figures**: group images in a `<div>` block with letter-suffixed numbering (1a, 1b, ...)
+- **Sub-figures**: group consecutive images with a caption line for letter-suffixed numbering (1a, 1b, ...)
 - **Auto-labeling**: figures and tables get IDs automatically on paste/drop/creation
 - **i18n**: English and Chinese defaults built-in
 - **Frontmatter config**: override prefixes and titles per-document
@@ -57,17 +57,26 @@ Batch: [@fig:a;@fig:b;@fig:c]         → "Figs. 1-3"
 Mixed: [@fig:cat;@tbl:data;@eq:einstein] → "Fig. 1, Table 1, Eq. 1"
 ```
 
-### Sub-figures
+Tags can also be placed on the next line (no blank line between):
 
 ```markdown
-<div id="fig:animals">
+![A sunset](sunset.png)
+{#fig:sunset}
+```
+
+### Sub-figures
+
+Group consecutive images with a `: Caption {#fig:id}` line:
+
+```markdown
 ![Cat](cat.png){#fig:cat}
 ![Dog](dog.png){#fig:dog}
-Domestic animals
-</div>
+: Domestic animals {#fig:animals}
 ```
 
 `[@fig:cat]` → "Fig. 1a", `[@fig:dog]` → "Fig. 1b", `[@fig:animals]` → "Fig. 1"
+
+A blank line between images breaks the group. The `<div id="fig:...">` HTML syntax is also supported for pandoc export compatibility.
 
 ## Installation
 
@@ -92,7 +101,7 @@ npm install
 ## Development
 
 ```bash
-# Run Rust tests (98 unit tests)
+# Run Rust tests (123 unit tests)
 cargo test -p turboref-core
 
 # Build WASM
@@ -125,7 +134,7 @@ secPrefix: ["Section", "Sections"]
 
 TurboRef separates concerns into two layers:
 
-- **Rust core** (`crates/core`): All parsing, numbering, reference resolution, and text rendering. Compiled to WebAssembly. 98 unit tests.
+- **Rust core** (`crates/core`): All parsing, numbering, reference resolution, and text rendering. Compiled to WebAssembly. 123 unit tests.
 - **TypeScript shell** (`src/`): Obsidian plugin lifecycle, CodeMirror 6 live decorations, DOM post-processing, auto-completion, event listeners, settings UI.
 
 The WASM boundary uses stateless JSON calls — the TypeScript side sends document content + config, gets back resolved references. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.

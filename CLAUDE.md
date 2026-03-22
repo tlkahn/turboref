@@ -11,7 +11,7 @@ Supports 5 reference types: `fig`, `tbl`, `sec`, `eq`, `lst` — plus trait-base
 ## Build Commands
 
 ```bash
-cargo test -p turboref-core          # Run all 98 Rust unit tests
+cargo test -p turboref-core          # Run all 123 Rust unit tests
 wasm-pack build crates/wasm --target web --release   # Build WASM
 node esbuild.config.mjs production   # Bundle TypeScript
 ./install.sh                         # Full build + install to Obsidian vault
@@ -54,8 +54,11 @@ pub trait DefinitionParser: Send + Sync {
     fn ref_type(&self) -> RefType;
     fn prefix_str(&self) -> &str;
     fn on_line(&self, line, line_idx, char_offset, ctx, counters, config) -> Vec<Definition>;
+    fn on_end(&self, counters: &mut Counters) -> Vec<Definition> { Vec::new() }
 }
 ```
+
+`on_end()` flushes pending state at EOF (e.g., figure parser's image accumulator).
 
 Register in `ParserRegistry::with_builtins()` in `parser/mod.rs`.
 

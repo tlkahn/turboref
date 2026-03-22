@@ -17,14 +17,25 @@ Lines inside code/math blocks are `continue`d — parsers never see them.
 
 ### Parser Dispatch
 
-Each parser implements `DefinitionParser::on_line(&self, line, ..., ctx, counters, config) -> Vec<Definition>`. The scanner calls every registered parser for each non-skipped line. Parsers check `ctx` flags to decide whether to act.
+Each parser implements `DefinitionParser::on_line(&self, line, ..., ctx, counters, config) -> Vec<Definition>`. The scanner calls every registered parser for each non-skipped line. Parsers check `ctx` flags to decide whether to act. After all lines, `on_end(&self, counters) -> Vec<Definition>` is called to flush pending state.
 
 Mutable state lives in `Counters` (passed as `&mut`), not in the parser structs themselves. This is because the trait requires `&self` (for `Send + Sync`).
 
-### Figure Sub-figure State Machine
+### Figure Parser
 
-The figure parser uses `counters.sub_fig: SubFigState` to track sub-figure block accumulation:
+The figure parser supports three definition tag placements:
+- **Same-line**: `![desc](img.png){#fig:id}` (with optional whitespace before `{`)
+- **Next-line**: `![desc](img.png)\n{#fig:id}`
+- **Caption-based sub-figures**: consecutive images + `: Caption {#fig:id}`
 
+**Image Accumulator** — Outside `<div>` blocks, consecutive images are buffered in `counters.image_acc: ImageAccumulator`. The accumulator is flushed in three ways:
+1. `: Caption {#fig:id}` line → `finalize_as_subfigures()` — assigns SubNumbered(n, a/b/c...) to each image, emits main figure as Simple(n)
+2. Non-image/non-caption line → `flush_accumulator()` — each tagged image becomes a standalone Simple(n)
+3. End of document → `on_end()` calls `flush_accumulator()`
+
+Images without `{#fig:id}` in a sub-figure group consume a sub-letter but emit no definition.
+
+**HTML div syntax** (for pandoc export) uses the separate `SubFigState` mechanism:
 ```
 <div id="fig:main">     → sub_fig.active = true, fig_count++
   ![Cat](cat.png){...}  → emit SubNumbered(fig_count, 'a')
@@ -33,7 +44,7 @@ The figure parser uses `counters.sub_fig: SubFigState` to track sub-figure block
 </div>                   → emit Simple(fig_count) with caption, reset sub_fig
 ```
 
-Caption extraction scans accumulated lines backwards, skipping images and div tags.
+The two mechanisms are mutually exclusive: `image_acc` is only used when `sub_fig.active == false`. Entering a `<div>` flushes the accumulator first.
 
 ### Equation Detection
 
@@ -147,7 +158,7 @@ esbuild treats the wasm-pack `.js` output as a regular module and inlines it int
 
 ## Test Coverage
 
-98 unit tests in `crates/core`, run via `cargo test -p turboref-core`. No WASM or browser required — the core crate is pure Rust with zero platform dependencies.
+123 unit tests in `crates/core`, run via `cargo test -p turboref-core`. No WASM or browser required — the core crate is pure Rust with zero platform dependencies.
 
 | Module | Tests |
 |--------|-------|
@@ -155,8 +166,8 @@ esbuild treats the wasm-pack `.js` output as a regular module and inlines it int
 | config | 5 |
 | i18n | 2 |
 | parser/scan | 5 |
-| parser/figure | 10 |
-| parser/table | 7 |
+| parser/figure | 34 |
+| parser/table | 8 |
 | parser/section | 9 |
 | parser/equation | 11 |
 | parser/listing | 8 |
