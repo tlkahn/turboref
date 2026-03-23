@@ -221,6 +221,22 @@ impl DefinitionParser for FigureParser {
         // PART B: Outside <div> — use image accumulator
         // ========================================
 
+        // B-pre. Check for {#fig:id} after a code block (e.g., mermaid/dot/d2/plantuml/excalidraw)
+        if ctx.prev_line_closed_code {
+            if let Some(caps) = FIG_TAG_RE.captures(trimmed) {
+                let id = caps[1].trim().to_string();
+                counters.fig_count += 1;
+                return vec![Definition {
+                    ref_type: RefType::Fig,
+                    id,
+                    number: RefNumber::Simple(counters.fig_count),
+                    caption: None,
+                    line: line_idx,
+                    char_offset,
+                }];
+            }
+        }
+
         // B0. If awaiting tag for last untagged image
         if counters.image_acc.awaiting_tag {
             if let Some(caps) = FIG_TAG_RE.captures(trimmed) {
@@ -728,5 +744,96 @@ Div caption\n\
         let content = "```\n![A](a.png){#fig:a}\n: Cap {#fig:cap}\n```";
         let defs = parse_figures(content);
         assert_eq!(defs.len(), 0);
+    }
+
+    // --- Figure tag after code blocks (diagram-as-image) ---
+
+    #[test]
+    fn parse_fig_after_mermaid_block() {
+        let content = "```mermaid\ngraph LR\n    A --> B\n```\n{#fig:diagram}";
+        let defs = parse_figures(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "diagram");
+        assert_eq!(defs[0].number, RefNumber::Simple(1));
+    }
+
+    #[test]
+    fn parse_fig_after_dot_block() {
+        let content = "```dot\ndigraph { A -> B }\n```\n{#fig:dotgraph}";
+        let defs = parse_figures(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "dotgraph");
+    }
+
+    #[test]
+    fn parse_fig_after_plantuml_block() {
+        let content = "```plantuml\nAlice -> Bob: hello\n```\n{#fig:sequence}";
+        let defs = parse_figures(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "sequence");
+    }
+
+    #[test]
+    fn parse_fig_after_d2_block() {
+        let content = "```d2\nx -> y\n```\n{#fig:d2dia}";
+        let defs = parse_figures(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "d2dia");
+    }
+
+    #[test]
+    fn parse_fig_after_excalidraw_block() {
+        let content = "```excalidraw\n{\"elements\":[]}\n```\n{#fig:sketch}";
+        let defs = parse_figures(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "sketch");
+    }
+
+    #[test]
+    fn parse_fig_after_tikz_block() {
+        let content = "```tikz\n\\draw (0,0) -- (1,1);\n```\n{#fig:tikzfig}";
+        let defs = parse_figures(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "tikzfig");
+    }
+
+    #[test]
+    fn parse_fig_after_generic_code_block() {
+        let content = "```\nsome code\n```\n{#fig:output}";
+        let defs = parse_figures(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "output");
+    }
+
+    #[test]
+    fn parse_fig_after_code_block_blank_line_no_match() {
+        let content = "```mermaid\ngraph LR\n```\n\n{#fig:diagram}";
+        let defs = parse_figures(content);
+        assert_eq!(defs.len(), 0);
+    }
+
+    #[test]
+    fn parse_fig_after_code_block_numbering() {
+        let content = "![First](a.png){#fig:a}\n\n```mermaid\ngraph LR\n```\n{#fig:b}";
+        let defs = parse_figures(content);
+        assert_eq!(defs.len(), 2);
+        assert_eq!(defs[0].id, "a");
+        assert_eq!(defs[0].number, RefNumber::Simple(1));
+        assert_eq!(defs[1].id, "b");
+        assert_eq!(defs[1].number, RefNumber::Simple(2));
+    }
+
+    #[test]
+    fn parse_lst_and_fig_dont_conflict() {
+        let config = DocumentConfig::default();
+        let registry = ParserRegistry::with_builtins();
+        let content = "```python\ncode\n```\n{#lst:code}\n\n```mermaid\ngraph\n```\n{#fig:diagram}";
+        let defs = scan_document(content, &config, &registry);
+        let fig_defs: Vec<_> = defs.iter().filter(|d| d.ref_type == RefType::Fig).collect();
+        let lst_defs: Vec<_> = defs.iter().filter(|d| d.ref_type == RefType::Lst).collect();
+        assert_eq!(fig_defs.len(), 1);
+        assert_eq!(fig_defs[0].id, "diagram");
+        assert_eq!(lst_defs.len(), 1);
+        assert_eq!(lst_defs[0].id, "code");
     }
 }
