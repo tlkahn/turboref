@@ -56,6 +56,20 @@ Three patterns, checked in priority order:
 
 The next-line pattern requires the scanner's context tracking since the closing `$$` and the `{#eq:id}` tag are on separate lines.
 
+### Figure Tags After Code Blocks
+
+The figure parser also checks `ctx.prev_line_closed_code` for `{#fig:id}` tags. This enables tagging diagram code blocks (mermaid, graphviz/dot, d2, plantuml, excalidraw, tikz) that Obsidian renders as images:
+
+````markdown
+```mermaid
+graph LR
+    A --> B
+```
+{#fig:diagram}
+````
+
+Works for any fenced code block type — the scanner sets `prev_line_closed_code` regardless of the info string.
+
 ### Listing Detection
 
 Only next-line: scanner sets `prev_line_closed_code = true` after a closing fence. Listing parser checks for `{#lst:id}` on that line. A blank line between the fence and tag breaks the association.
@@ -77,6 +91,12 @@ When rendering batch citations like `[@fig:a;@fig:b;@fig:c]`:
 4. Otherwise → comma-separated "1, 3, 5"
 5. Select prefix from config array by count: index `min(count-1, len-1)` for singular/plural
 
+### Definition Tag Scanner
+
+`definition_tag.rs::scan_definition_tags()` finds all `{#type:id}` patterns in the document using regex `\{#(\w+):([^}]+)\}`, returning their precise UTF-16 start/end positions. Tags inside fenced code blocks and display math blocks are skipped via pre-computed excluded byte ranges.
+
+`resolve_definition_tags()` joins scanned tags with the `ReferenceMap` to produce `ResolvedDefinitionTag` values. Resolved tags render as `"#Prefix Number"` (e.g., "#Fig. 1") — the hash prefix distinguishes definitions from citations visually.
+
 ### Template Engine
 
 `template.rs::expand()` replaces `{tag:n}` with `n` random alphanumeric chars (via `rand` crate), `{filename}` / `{index}` / `{ext}` from the provided `TemplateContext`.
@@ -91,7 +111,7 @@ Built with `wasm-pack --target web`, which generates an `initSync()` function. T
 initSync({ module: wasmBinary });
 ```
 
-where `wasmBinary` is read from disk via Obsidian's `FileSystemAdapter.readBinary()`. After init, the exported functions (`parse_document`, `resolve_citations`, `get_definitions`, `expand_template`) are available as regular JS function calls.
+where `wasmBinary` is read from disk via Obsidian's `FileSystemAdapter.readBinary()`. After init, the exported functions (`parse_document`, `resolve_citations`, `get_definitions`, `resolve_all_decorations`, `expand_template`) are available as regular JS function calls.
 
 ### Serialization
 
@@ -122,11 +142,14 @@ Obsidian `MarkdownPostProcessor`. On each section render:
 ### Live Mode (`renderer/live-mode.ts`)
 
 CodeMirror 6 `EditorView.decorations.compute(["doc", "selection"])`:
-1. Call `bridge.resolveCitations()` on full doc content
-2. For each resolved citation, skip if cursor is within ±1 char of the range
-3. Add `Decoration.replace()` with `CrossrefWidget` for the rest
+1. Single WASM call: `bridge.resolveAllDecorations(content, configJson)` → returns both citations and definition tags
+2. Collect decoration entries from both arrays, skipping cursor-overlapping ranges (±1 buffer)
+3. Sort all entries by start position (CM6's `RangeSetBuilder` requirement)
+4. Add `Decoration.replace()` with `CrossrefWidget` for citations and `DefinitionWidget` for definition tags
 
-The `CrossrefWidget` renders a styled `<span>` via `toDOM()`. Invalid refs get the `.invalid` class (strikethrough + error color).
+**CrossrefWidget** renders citations as styled `<span class="turboref-citation">` (accent color, solid border). **DefinitionWidget** renders definition tags as `<span class="turboref-definition">` (muted color, dashed border, smaller font).
+
+**Click-to-edit on widgets**: `Decoration.replace` widgets swallow mouse events — CM6 does not place the cursor inside a replaced range on click (arrow keys work because they traverse positions sequentially). The fix is to handle `mousedown` directly on the widget DOM element (`widgets.ts:toDOM()`), calling `preventDefault()` + `stopPropagation()` to block CM6's default handling, then using `setTimeout(0)` to dispatch a `view.dispatch({ selection: { anchor: charStart } })` after CM6's event cycle settles. The `EditorView` is available via the `toDOM(view)` parameter.
 
 ### EditorSuggest (`suggest.ts`)
 
@@ -158,7 +181,7 @@ esbuild treats the wasm-pack `.js` output as a regular module and inlines it int
 
 ## Test Coverage
 
-123 unit tests in `crates/core`, run via `cargo test -p turboref-core`. No WASM or browser required — the core crate is pure Rust with zero platform dependencies.
+154 unit tests in `crates/core`, run via `cargo test -p turboref-core`. No WASM or browser required — the core crate is pure Rust with zero platform dependencies.
 
 | Module | Tests |
 |--------|-------|
@@ -166,12 +189,13 @@ esbuild treats the wasm-pack `.js` output as a regular module and inlines it int
 | config | 5 |
 | i18n | 2 |
 | parser/scan | 5 |
-| parser/figure | 34 |
+| parser/figure | 44 |
 | parser/table | 8 |
 | parser/section | 9 |
 | parser/equation | 11 |
 | parser/listing | 8 |
 | citation | 13 |
+| definition_tag | 21 |
 | renderer | 11 |
 | template | 8 |
 | document (e2e) | 3 |

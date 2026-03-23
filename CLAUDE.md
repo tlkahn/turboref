@@ -11,7 +11,7 @@ Supports 5 reference types: `fig`, `tbl`, `sec`, `eq`, `lst` — plus trait-base
 ## Build Commands
 
 ```bash
-cargo test -p turboref-core          # Run all 123 Rust unit tests
+cargo test -p turboref-core          # Run all 154 Rust unit tests
 wasm-pack build crates/wasm --target web --release   # Build WASM
 node esbuild.config.mjs production   # Bundle TypeScript
 ./install.sh                         # Full build + install to Obsidian vault
@@ -23,7 +23,7 @@ node esbuild.config.mjs production   # Bundle TypeScript
 Two-crate Rust workspace + TypeScript:
 
 - **`crates/core`** — Pure Rust library (zero WASM deps). All parsing, numbering, citation resolution, rendering, template expansion. This is the TDD target.
-- **`crates/wasm`** — Thin `wasm-bindgen` wrapper. Exports 4 functions, JSON in/out.
+- **`crates/wasm`** — Thin `wasm-bindgen` wrapper. Exports 5 functions (`parse_document`, `resolve_citations`, `get_definitions`, `resolve_all_decorations`, `expand_template`), JSON in/out.
 - **`src/`** — TypeScript. Obsidian plugin lifecycle, CodeMirror 6 live rendering, MarkdownPostProcessor for reading mode, EditorSuggest for `[@` completion, image/table event listeners, settings UI.
 
 ### Data Flow
@@ -68,7 +68,7 @@ Parsers check `ScanContext` to avoid false matches:
 - `in_code_block` — inside fenced code (``` or ~~~)
 - `in_math_block` — inside display math (`$$` on its own line)
 - `prev_line_closed_math` — equation parser checks this for next-line `{#eq:id}` tags
-- `prev_line_closed_code` — listing parser checks this for next-line `{#lst:id}` tags
+- `prev_line_closed_code` — listing parser checks for `{#lst:id}`, figure parser checks for `{#fig:id}` (diagram code blocks)
 
 ## File Layout
 
@@ -77,6 +77,7 @@ crates/core/src/
   parser/          # DefinitionParser trait + 5 parsers (figure, table, section, equation, listing)
     scan.rs        # ScanContext + single-pass scanner
   citation.rs      # [@...] pattern scanning with UTF-16 offsets
+  definition_tag.rs # {#type:id} tag scanning + resolution for live rendering
   renderer.rs      # Citation → rendered text (batch, range, prefix selection)
   resolver.rs      # ReferenceMap (id → Definition lookup)
   template.rs      # {tag:n}, {filename}, {index}, {ext} expansion
@@ -94,7 +95,7 @@ src/
   renderer/
     reading-mode.ts  # MarkdownPostProcessor
     live-mode.ts     # CodeMirror 6 decorations
-    widgets.ts       # CrossrefWidget
+    widgets.ts       # CrossrefWidget + DefinitionWidget
   listeners/
     image.ts       # Paste/drop → auto {#fig:id}
     table.ts       # Table detection → auto caption
