@@ -23,3 +23,25 @@
 .turboref-definition-marker {
     display: none;
 }
+
+.turboref-definition {
+    color: var(--text-muted);
+    background-color: var(--background-modifier-hover);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-weight: 400;
+    font-size: 0.9em;
+    border: 1px dashed var(--background-modifier-border);
+    opacity: 0.85;
+}
+
+.turboref-definition.invalid {
+    color: var(--text-error);
+    background-color: var(--background-modifier-error);
+    text-decoration: line-through;
+    border: 1px dashed var(--color-red);
+}
+
+.turboref-definition:hover {
+    opacity: 1.0;
+}

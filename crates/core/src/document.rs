@@ -3,7 +3,8 @@ use crate::config::DocumentConfig;
 use crate::parser::{scan::scan_document, ParserRegistry};
 use crate::renderer;
 use crate::resolver::ReferenceMap;
-use crate::types::{Citation, Definition, ResolvedCitation};
+use crate::definition_tag;
+use crate::types::{Citation, Definition, ResolvedCitation, ResolvedDefinitionTag};
 
 /// Top-level document representation. Orchestrates parse → resolve → render.
 pub struct Document {
@@ -46,6 +47,12 @@ impl Document {
     /// Get all definitions found in the document.
     pub fn get_definitions(&self) -> &[Definition] {
         &self.definitions
+    }
+
+    /// Resolve definition tags to rendered labels.
+    pub fn resolve_definition_tags(&self, content: &str) -> Vec<ResolvedDefinitionTag> {
+        let tags = definition_tag::scan_definition_tags(content);
+        definition_tag::resolve_definition_tags(&tags, &self.ref_map, &self.config)
     }
 
     /// Get the reference map for lookups.

@@ -6,4 +6,5 @@ pub mod citation;
 pub mod resolver;
 pub mod renderer;
 pub mod template;
+pub mod definition_tag;
 pub mod document;

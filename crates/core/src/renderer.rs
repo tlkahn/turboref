@@ -69,7 +69,7 @@ fn resolve_one(
     }
 }
 
-fn prefix_for_type<'a>(ref_type: &RefType, config: &'a DocumentConfig) -> &'a [String] {
+pub(crate) fn prefix_for_type<'a>(ref_type: &RefType, config: &'a DocumentConfig) -> &'a [String] {
     match ref_type {
         RefType::Fig => &config.fig_prefix,
         RefType::Tbl => &config.tbl_prefix,

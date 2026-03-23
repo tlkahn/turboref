@@ -2,7 +2,7 @@ import { EditorView, Decoration, ViewPlugin, ViewUpdate } from "@codemirror/view
 import { Extension, RangeSetBuilder } from "@codemirror/state";
 import type TurboRefPlugin from "../main";
 import { buildDocumentConfigJson } from "../config";
-import { CrossrefWidget } from "./widgets";
+import { CrossrefWidget, DefinitionWidget } from "./widgets";
 
 /**
  * Creates CodeMirror 6 extensions for live cross-reference rendering in editing mode.
@@ -12,6 +12,12 @@ export function createLiveModeExtension(plugin: TurboRefPlugin): Extension {
         createDecorationExtension(plugin),
         createViewPlugin(plugin),
     ];
+}
+
+interface DecorationEntry {
+    start: number;
+    end: number;
+    decoration: Decoration;
 }
 
 function createDecorationExtension(plugin: TurboRefPlugin): Extension {
@@ -35,33 +41,62 @@ function createDecorationExtension(plugin: TurboRefPlugin): Extension {
             const frontmatter = cache?.frontmatter;
             const configJson = buildDocumentConfigJson(plugin.settings, frontmatter);
 
-            const resolved = plugin.bridge.resolveCitations(content, configJson);
+            // Single WASM call returns both citations and definition tags
+            const all = plugin.bridge.resolveAllDecorations(content, configJson);
+            const entries: DecorationEntry[] = [];
 
-            for (const citation of resolved) {
+            // Collect citation decorations
+            for (const citation of all.citations) {
                 const start = citation.char_start;
                 const end = citation.char_end;
 
-                // Skip if cursor or selection overlaps (±1 buffer for easier editing)
-                if (isInEditableRange(start, end, cursorPos, selStart, selEnd)) {
-                    continue;
-                }
+                if (isInEditableRange(start, end, cursorPos, selStart, selEnd)) continue;
+                if (start < 0 || end > state.doc.length || start >= end) continue;
 
-                // Bounds check
-                if (start < 0 || end > state.doc.length || start >= end) {
-                    continue;
-                }
-
-                const decoration = Decoration.replace({
-                    widget: new CrossrefWidget(
-                        citation.original,
-                        citation.rendered_text,
-                        citation.is_valid,
-                        start,
-                        end
-                    ),
+                entries.push({
+                    start,
+                    end,
+                    decoration: Decoration.replace({
+                        widget: new CrossrefWidget(
+                            citation.original,
+                            citation.rendered_text,
+                            citation.is_valid,
+                            start,
+                            end
+                        ),
+                    }),
                 });
+            }
 
-                builder.add(start, end, decoration);
+            // Collect definition tag decorations
+            for (const defTag of all.definition_tags) {
+                const start = defTag.char_start;
+                const end = defTag.char_end;
+
+                if (isInEditableRange(start, end, cursorPos, selStart, selEnd)) continue;
+                if (start < 0 || end > state.doc.length || start >= end) continue;
+                if (!defTag.is_valid) continue;
+
+                entries.push({
+                    start,
+                    end,
+                    decoration: Decoration.replace({
+                        widget: new DefinitionWidget(
+                            defTag.original,
+                            defTag.rendered_text,
+                            defTag.is_valid,
+                            start,
+                            end
+                        ),
+                    }),
+                });
+            }
+
+            // RangeSetBuilder requires sorted order by start position
+            entries.sort((a, b) => a.start - b.start);
+
+            for (const entry of entries) {
+                builder.add(entry.start, entry.end, entry.decoration);
             }
 
             return builder.finish();
@@ -79,9 +114,6 @@ function createViewPlugin(plugin: TurboRefPlugin): Extension {
 
             update(update: ViewUpdate) {
                 if (!plugin.settings.enableLiveRendering) return;
-                // Decorations auto-recompute on doc/selection change
-                // via the compute() above. This plugin exists for future
-                // extension (e.g., debouncing, caching).
             }
         }
     );
@@ -98,11 +130,9 @@ function isInEditableRange(
     const expandedStart = Math.max(0, refStart - buffer);
     const expandedEnd = refEnd + buffer;
 
-    // Selection range overlap
     if (selStart !== selEnd) {
         return !(expandedEnd <= selStart || expandedStart >= selEnd);
     }
 
-    // Cursor inside range
     return cursorPos >= expandedStart && cursorPos <= expandedEnd;
 }

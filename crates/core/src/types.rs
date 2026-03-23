@@ -125,6 +125,18 @@ pub struct ResolvedCitation {
     pub original: String,
 }
 
+/// A resolved definition tag ready for live-mode rendering.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolvedDefinitionTag {
+    pub char_start: usize,
+    pub char_end: usize,
+    pub rendered_text: String,
+    pub is_valid: bool,
+    pub original: String,
+    pub ref_type: String,
+    pub id: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,5 +1,5 @@
 import { FileSystemAdapter } from "obsidian";
-import { initSync, expand_template, get_definitions, parse_document, resolve_citations } from "../crates/wasm/pkg/turboref_wasm";
+import { initSync, expand_template, get_definitions, parse_document, resolve_citations, resolve_all_decorations } from "../crates/wasm/pkg/turboref_wasm";
 
 export interface ResolvedCitation {
     char_start: number;
@@ -16,6 +16,21 @@ export interface DefinitionInfo {
     caption: string | null;
     line: number;
     char_offset: number;
+}
+
+export interface ResolvedDefinitionTag {
+    char_start: number;
+    char_end: number;
+    rendered_text: string;
+    is_valid: boolean;
+    original: string;
+    ref_type: string;
+    id: string;
+}
+
+export interface AllDecorations {
+    citations: ResolvedCitation[];
+    definition_tags: ResolvedDefinitionTag[];
 }
 
 export class WasmBridge {
@@ -55,5 +70,10 @@ export class WasmBridge {
     parseDocument(content: string, configJson: string): { definitions: DefinitionInfo[] } {
         this.ensureInit();
         return JSON.parse(parse_document(content, configJson));
+    }
+
+    resolveAllDecorations(content: string, configJson: string): AllDecorations {
+        this.ensureInit();
+        return JSON.parse(resolve_all_decorations(content, configJson));
     }
 }
