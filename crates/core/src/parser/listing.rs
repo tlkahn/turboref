@@ -6,9 +6,14 @@ use crate::types::{Definition, RefNumber, RefType};
 use super::{Counters, DefinitionParser};
 use super::scan::ScanContext;
 
-// Next-line tag: {#lst:id}
+// Next-line bare tag: {#lst:id}
 static LST_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^\s*\{#lst:([^}]+)\}\s*$").unwrap()
+});
+
+// Caption-style: : Caption text {#lst:id}
+static LST_CAPTION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^:(.*?)\s*\{#lst:([^}]+)\}\s*$").unwrap()
 });
 
 pub struct ListingParser;
@@ -43,6 +48,7 @@ impl DefinitionParser for ListingParser {
 
         // Only check for tag on the line immediately after a code block closes
         if ctx.prev_line_closed_code {
+            // Bare tag: {#lst:id}
             if let Some(caps) = LST_TAG_RE.captures(line) {
                 let id = caps[1].trim().to_string();
                 counters.lst_count += 1;
@@ -51,6 +57,20 @@ impl DefinitionParser for ListingParser {
                     id,
                     number: RefNumber::Simple(counters.lst_count),
                     caption: None,
+                    line: line_idx,
+                    char_offset,
+                }];
+            }
+            // Caption-style: : Caption {#lst:id}
+            if let Some(caps) = LST_CAPTION_RE.captures(line) {
+                let caption = caps[1].trim().to_string();
+                let id = caps[2].trim().to_string();
+                counters.lst_count += 1;
+                return vec![Definition {
+                    ref_type: RefType::Lst,
+                    id,
+                    number: RefNumber::Simple(counters.lst_count),
+                    caption: if caption.is_empty() { None } else { Some(caption) },
                     line: line_idx,
                     char_offset,
                 }];
@@ -140,5 +160,43 @@ mod tests {
         let defs = parse_listings(content);
         assert_eq!(defs.len(), 1);
         assert_eq!(defs[0].id, "spaced");
+    }
+
+    // --- Caption-style listing tag tests ---
+
+    #[test]
+    fn parse_listing_with_caption() {
+        let content = "```python\nprint('hello')\n```\n: My listing {#lst:hello}";
+        let defs = parse_listings(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "hello");
+        assert_eq!(defs[0].caption, Some("My listing".to_string()));
+        assert_eq!(defs[0].number, RefNumber::Simple(1));
+    }
+
+    #[test]
+    fn parse_listing_with_caption_unicode() {
+        let content = "```python\ncode\n```\n: 选择最优动作 {#lst:best}";
+        let defs = parse_listings(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "best");
+        assert_eq!(defs[0].caption, Some("选择最优动作".to_string()));
+    }
+
+    #[test]
+    fn parse_listing_with_empty_caption() {
+        let content = "```\ncode\n```\n: {#lst:nocap}";
+        let defs = parse_listings(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "nocap");
+        assert_eq!(defs[0].caption, None);
+    }
+
+    #[test]
+    fn parse_listing_caption_not_after_code_block() {
+        // Caption-style without preceding code block → ignored
+        let content = "Some text\n: Caption {#lst:orphan}";
+        let defs = parse_listings(content);
+        assert_eq!(defs.len(), 0);
     }
 }

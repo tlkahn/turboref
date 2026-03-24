@@ -17,9 +17,14 @@ static INLINE_SAME_LINE_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?:^|[^$])\$([^$]+)\$\s*\{#eq:([^}]+)\}\s*$").unwrap()
 });
 
-// Next-line tag: {#eq:id}
+// Next-line bare tag: {#eq:id}
 static EQ_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^\s*\{#eq:([^}]+)\}\s*$").unwrap()
+});
+
+// Caption-style: : Caption text {#eq:id}
+static EQ_CAPTION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^:(.*?)\s*\{#eq:([^}]+)\}\s*$").unwrap()
 });
 
 
@@ -55,6 +60,7 @@ impl DefinitionParser for EquationParser {
 
         // 1. Check for next-line tag after display math block closed
         if ctx.prev_line_closed_math {
+            // Bare tag: {#eq:id}
             if let Some(caps) = EQ_TAG_RE.captures(line) {
                 let id = caps[1].trim().to_string();
                 counters.eq_count += 1;
@@ -63,6 +69,20 @@ impl DefinitionParser for EquationParser {
                     id,
                     number: RefNumber::Simple(counters.eq_count),
                     caption: None,
+                    line: line_idx,
+                    char_offset,
+                }];
+            }
+            // Caption-style: : Caption {#eq:id}
+            if let Some(caps) = EQ_CAPTION_RE.captures(line) {
+                let caption = caps[1].trim().to_string();
+                let id = caps[2].trim().to_string();
+                counters.eq_count += 1;
+                return vec![Definition {
+                    ref_type: RefType::Eq,
+                    id,
+                    number: RefNumber::Simple(counters.eq_count),
+                    caption: if caption.is_empty() { None } else { Some(caption) },
                     line: line_idx,
                     char_offset,
                 }];
@@ -207,5 +227,42 @@ $$\nF = ma\n$$\n{#eq:newton}";
         let defs = parse_equations("$$E = mc^2$${#eq:einstein}  ");
         assert_eq!(defs.len(), 1);
         assert_eq!(defs[0].id, "einstein");
+    }
+
+    // --- Caption-style equation tag tests ---
+
+    #[test]
+    fn parse_equation_with_caption() {
+        let content = "$$\nE = mc^2\n$$\n: Einstein's equation {#eq:einstein}";
+        let defs = parse_equations(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "einstein");
+        assert_eq!(defs[0].caption, Some("Einstein's equation".to_string()));
+        assert_eq!(defs[0].number, RefNumber::Simple(1));
+    }
+
+    #[test]
+    fn parse_equation_with_caption_unicode() {
+        let content = "$$\nE = mc^2\n$$\n: 爱因斯坦方程 {#eq:einstein}";
+        let defs = parse_equations(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].caption, Some("爱因斯坦方程".to_string()));
+    }
+
+    #[test]
+    fn parse_equation_with_empty_caption() {
+        let content = "$$\nE = mc^2\n$$\n: {#eq:einstein}";
+        let defs = parse_equations(content);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "einstein");
+        assert_eq!(defs[0].caption, None);
+    }
+
+    #[test]
+    fn parse_equation_caption_not_after_math() {
+        // Caption-style without preceding $$ block → ignored
+        let content = "Some text\n: Caption {#eq:orphan}";
+        let defs = parse_equations(content);
+        assert_eq!(defs.len(), 0);
     }
 }
