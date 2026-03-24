@@ -7,6 +7,8 @@ export interface ResolvedCitation {
     rendered_text: string;
     is_valid: boolean;
     original: string;
+    target_line: number | null;
+    target_char_offset: number | null;
 }
 
 export interface DefinitionInfo {

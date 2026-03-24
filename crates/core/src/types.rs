@@ -123,6 +123,10 @@ pub struct ResolvedCitation {
     pub rendered_text: String,
     pub is_valid: bool,
     pub original: String,
+    /// Target definition's line number (for click-to-navigate).
+    pub target_line: Option<usize>,
+    /// Target definition's UTF-16 char offset (line start, for scrolling).
+    pub target_char_offset: Option<usize>,
 }
 
 /// A resolved definition tag ready for live-mode rendering.

@@ -1,4 +1,4 @@
-import { MarkdownPostProcessorContext, TFile } from "obsidian";
+import { MarkdownPostProcessorContext, MarkdownView, TFile } from "obsidian";
 import type TurboRefPlugin from "../main";
 import { buildDocumentConfigJson } from "../config";
 
@@ -28,7 +28,7 @@ export function createPostProcessor(plugin: TurboRefPlugin) {
                 const resolved = plugin.bridge.resolveCitations(content, configJson);
 
                 // Replace citation text in DOM
-                replaceCitationsInDom(el, resolved);
+                replaceCitationsInDom(el, resolved, plugin, ctx);
 
                 // Hide definition markers
                 hideDefMarkers(el);
@@ -43,12 +43,53 @@ interface ResolvedCitation {
     rendered_text: string;
     is_valid: boolean;
     original: string;
+    target_line: number | null;
+    target_char_offset: number | null;
+}
+
+/**
+ * Navigate to a line in editing mode and highlight it.
+ */
+function navigateToLine(plugin: TurboRefPlugin, sourcePath: string, targetLine: number) {
+    const leaf = plugin.app.workspace.getMostRecentLeaf();
+    if (!leaf) return;
+
+    const file = plugin.app.vault.getAbstractFileByPath(sourcePath);
+    if (!(file instanceof TFile)) return;
+
+    // Open the file in editing mode at the target line
+    leaf.openFile(file, {
+        eState: { line: targetLine },
+    }).then(() => {
+        // After navigation, highlight the target line
+        const view = leaf.view;
+        if (view instanceof MarkdownView && view.editor) {
+            const editor = view.editor;
+            editor.setCursor({ line: targetLine, ch: 0 });
+            // Highlight via DOM
+            setTimeout(() => {
+                const cmEditor = (editor as any).cm as any; // CodeMirror EditorView
+                if (cmEditor?.domAtPos) {
+                    try {
+                        const line = cmEditor.state.doc.line(targetLine + 1);
+                        const domPos = cmEditor.domAtPos(line.from);
+                        const cmLine = (domPos.node as HTMLElement).closest?.(".cm-line")
+                            ?? domPos.node.parentElement?.closest(".cm-line");
+                        if (cmLine) {
+                            cmLine.classList.add("turboref-highlight-blink");
+                            setTimeout(() => cmLine.classList.remove("turboref-highlight-blink"), 1500);
+                        }
+                    } catch { /* ignore */ }
+                }
+            }, 100);
+        }
+    });
 }
 
 /**
  * Walk text nodes and replace [@...] citations with styled spans.
  */
-function replaceCitationsInDom(el: HTMLElement, resolved: ResolvedCitation[]) {
+function replaceCitationsInDom(el: HTMLElement, resolved: ResolvedCitation[], plugin: TurboRefPlugin, ctx: MarkdownPostProcessorContext) {
     if (resolved.length === 0) return;
 
     // Build a map from original text to rendered
@@ -97,11 +138,19 @@ function replaceCitationsInDom(el: HTMLElement, resolved: ResolvedCitation[]) {
                 fragment.appendChild(document.createTextNode(text.slice(lastEnd, start)));
             }
 
-            // Create styled span
+            // Create styled span with click-to-navigate
             const span = document.createElement("span");
             span.className = `turboref-citation ${citation.is_valid ? "" : "invalid"}`.trim();
             span.textContent = citation.rendered_text;
             span.title = citation.original;
+
+            if (citation.target_line != null) {
+                span.style.cursor = "pointer";
+                span.addEventListener("click", () => {
+                    navigateToLine(plugin, ctx.sourcePath, citation.target_line!);
+                });
+            }
+
             fragment.appendChild(span);
 
             lastEnd = end;

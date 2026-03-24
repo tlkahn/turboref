@@ -1,7 +1,26 @@
 import { EditorView, WidgetType } from "@codemirror/view";
 
 /**
+ * Highlight a line at the given position with a blink animation.
+ */
+export function highlightLine(view: EditorView, pos: number): void {
+    try {
+        const line = view.state.doc.lineAt(pos);
+        const domPos = view.domAtPos(line.from);
+        const cmLine = (domPos.node as HTMLElement).closest?.(".cm-line")
+            ?? (domPos.node.parentElement)?.closest(".cm-line");
+        if (cmLine) {
+            cmLine.classList.add("turboref-highlight-blink");
+            setTimeout(() => cmLine.classList.remove("turboref-highlight-blink"), 1500);
+        }
+    } catch {
+        // Position may be out of viewport; ignore
+    }
+}
+
+/**
  * CodeMirror widget for rendering a cross-reference citation inline.
+ * Mouse click navigates to the definition; arrow keys expand in-place.
  */
 export class CrossrefWidget extends WidgetType {
     constructor(
@@ -9,7 +28,8 @@ export class CrossrefWidget extends WidgetType {
         private readonly renderedText: string,
         private readonly isValid: boolean,
         private readonly charStart: number,
-        private readonly charEnd: number
+        private readonly charEnd: number,
+        private readonly targetCharOffset: number | null = null
     ) {
         super();
     }
@@ -21,16 +41,31 @@ export class CrossrefWidget extends WidgetType {
         span.title = this.original;
         span.setAttribute("data-original-ref", this.original);
 
-        const charStart = this.charStart;
+        const targetOffset = this.targetCharOffset;
         span.addEventListener("mousedown", (e) => {
             e.preventDefault();
             e.stopPropagation();
-            // Dispatch after CM6's own event processing settles
             setTimeout(() => {
-                view.dispatch({ selection: { anchor: charStart } });
-                view.focus();
+                if (targetOffset != null) {
+                    // Navigate to definition
+                    view.dispatch({
+                        selection: { anchor: targetOffset },
+                        scrollIntoView: true,
+                    });
+                    view.focus();
+                    // Highlight the target line after scroll settles
+                    requestAnimationFrame(() => highlightLine(view, targetOffset));
+                } else {
+                    // Fallback: place cursor at citation
+                    view.dispatch({ selection: { anchor: this.charStart } });
+                    view.focus();
+                }
             }, 0);
         });
+
+        if (targetOffset != null) {
+            span.style.cursor = "pointer";
+        }
 
         return span;
     }
@@ -41,14 +76,15 @@ export class CrossrefWidget extends WidgetType {
             this.renderedText === other.renderedText &&
             this.isValid === other.isValid &&
             this.charStart === other.charStart &&
-            this.charEnd === other.charEnd
+            this.charEnd === other.charEnd &&
+            this.targetCharOffset === other.targetCharOffset
         );
     }
 }
 
 /**
  * CodeMirror widget for rendering a definition tag inline.
- * Visually distinct from citations (dashed border, muted).
+ * Click places cursor at the tag (it's already at the definition).
  */
 export class DefinitionWidget extends WidgetType {
     constructor(

@@ -62,7 +62,8 @@ function createDecorationExtension(plugin: TurboRefPlugin): Extension {
                             citation.rendered_text,
                             citation.is_valid,
                             start,
-                            end
+                            end,
+                            citation.target_char_offset
                         ),
                     }),
                 });

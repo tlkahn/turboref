@@ -21,10 +21,12 @@ fn resolve_one(
     ref_map: &ReferenceMap,
     config: &DocumentConfig,
 ) -> ResolvedCitation {
-    // Group refs by type, preserving order of first appearance
+    // Group refs by type, preserving order of first appearance.
+    // Track the first resolved definition for navigation target.
     let mut groups: BTreeMap<String, Vec<&RefNumber>> = BTreeMap::new();
     let mut group_order: Vec<String> = Vec::new();
     let mut all_valid = true;
+    let mut first_target: Option<(usize, usize)> = None; // (line, char_offset)
 
     for cref in &citation.refs {
         let key = cref.ref_type.prefix_str().to_string();
@@ -33,6 +35,9 @@ fn resolve_one(
         }
         if let Some(def) = ref_map.get(&cref.id) {
             groups.entry(key).or_default().push(&def.number);
+            if first_target.is_none() {
+                first_target = Some((def.line, def.char_offset));
+            }
         } else {
             all_valid = false;
         }
@@ -45,6 +50,8 @@ fn resolve_one(
             rendered_text: citation.original.clone(),
             is_valid: false,
             original: citation.original.clone(),
+            target_line: None,
+            target_char_offset: None,
         };
     }
 
@@ -66,6 +73,8 @@ fn resolve_one(
         rendered_text: rendered_groups.join(", "),
         is_valid: true,
         original: citation.original.clone(),
+        target_line: first_target.map(|(l, _)| l),
+        target_char_offset: first_target.map(|(_, o)| o),
     }
 }
 
@@ -283,5 +292,67 @@ mod tests {
         let config = crate::i18n::localized_defaults(crate::i18n::Locale::Zh);
         let resolved = resolve_all(&[citation], &ref_map, &config);
         assert_eq!(resolved[0].rendered_text, "图 1");
+    }
+
+    // --- Target navigation info tests ---
+
+    fn make_def_at(ref_type: RefType, id: &str, number: RefNumber, line: usize, char_offset: usize) -> Definition {
+        Definition {
+            ref_type,
+            id: id.to_string(),
+            number,
+            caption: None,
+            line,
+            char_offset,
+        }
+    }
+
+    #[test]
+    fn resolve_single_figure_has_target_info() {
+        let ref_map = make_ref_map(vec![
+            make_def_at(RefType::Fig, "cat", RefNumber::Simple(1), 5, 100),
+        ]);
+        let citation = make_citation(vec![("fig", "cat")]);
+        let config = DocumentConfig::default();
+        let resolved = resolve_all(&[citation], &ref_map, &config);
+        assert_eq!(resolved[0].target_line, Some(5));
+        assert_eq!(resolved[0].target_char_offset, Some(100));
+    }
+
+    #[test]
+    fn resolve_unresolved_has_no_target() {
+        let ref_map = make_ref_map(vec![]);
+        let citation = make_citation(vec![("fig", "missing")]);
+        let config = DocumentConfig::default();
+        let resolved = resolve_all(&[citation], &ref_map, &config);
+        assert_eq!(resolved[0].target_line, None);
+        assert_eq!(resolved[0].target_char_offset, None);
+    }
+
+    #[test]
+    fn resolve_batch_uses_first_ref_target() {
+        let ref_map = make_ref_map(vec![
+            make_def_at(RefType::Fig, "a", RefNumber::Simple(1), 2, 50),
+            make_def_at(RefType::Fig, "b", RefNumber::Simple(2), 8, 200),
+        ]);
+        let citation = make_citation(vec![("fig", "a"), ("fig", "b")]);
+        let config = DocumentConfig::default();
+        let resolved = resolve_all(&[citation], &ref_map, &config);
+        // Target should be the first ref's definition
+        assert_eq!(resolved[0].target_line, Some(2));
+        assert_eq!(resolved[0].target_char_offset, Some(50));
+    }
+
+    #[test]
+    fn resolve_mixed_types_first_ref_target() {
+        let ref_map = make_ref_map(vec![
+            make_def_at(RefType::Fig, "cat", RefNumber::Simple(1), 3, 60),
+            make_def_at(RefType::Tbl, "data", RefNumber::Simple(1), 10, 300),
+        ]);
+        let citation = make_citation(vec![("fig", "cat"), ("tbl", "data")]);
+        let config = DocumentConfig::default();
+        let resolved = resolve_all(&[citation], &ref_map, &config);
+        assert_eq!(resolved[0].target_line, Some(3));
+        assert_eq!(resolved[0].target_char_offset, Some(60));
     }
 }

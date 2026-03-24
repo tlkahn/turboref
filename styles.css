@@ -45,3 +45,13 @@
 .turboref-definition:hover {
     opacity: 1.0;
 }
+
+/* Highlight blink animation for navigation targets */
+@keyframes turboref-blink {
+    0%   { background-color: var(--text-highlight-bg); }
+    100% { background-color: transparent; }
+}
+
+.turboref-highlight-blink {
+    animation: turboref-blink 1.5s ease-out;
+}
