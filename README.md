@@ -8,6 +8,7 @@ Built with a **Rust/WASM core** for fast, reliable parsing and a TypeScript UI l
 
 - **All pandoc-crossref types**: figures, tables, sections, equations, code listings
 - **Live editing preview**: both citations (`[@fig:cat]` → "Fig. 1") and definition tags (`{#fig:cat}` → "#Fig. 1") render inline, expanding when your cursor enters them
+- **Click-to-navigate**: click a citation to scroll to its definition with a highlight blink — like Obsidian's `^block` navigation
 - **Reading mode rendering**: full cross-reference resolution in preview
 - **Auto-completion**: type `[@` to get suggestions for all defined references
 - **Batch references**: `[@fig:a;@fig:b;@fig:c]` renders as "Figs. 1-3" (consecutive range detection)
@@ -111,7 +112,7 @@ npm install
 ## Development
 
 ```bash
-# Run Rust tests (154 unit tests)
+# Run Rust tests (158 unit tests)
 cargo test -p turboref-core
 
 # Build WASM
@@ -144,7 +145,7 @@ secPrefix: ["Section", "Sections"]
 
 TurboRef separates concerns into two layers:
 
-- **Rust core** (`crates/core`): All parsing, numbering, reference resolution, and text rendering. Compiled to WebAssembly. 154 unit tests.
+- **Rust core** (`crates/core`): All parsing, numbering, reference resolution, and text rendering. Compiled to WebAssembly. 158 unit tests.
 - **TypeScript shell** (`src/`): Obsidian plugin lifecycle, CodeMirror 6 live decorations, DOM post-processing, auto-completion, event listeners, settings UI.
 
 The WASM boundary uses stateless JSON calls — the TypeScript side sends document content + config, gets back resolved references. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.

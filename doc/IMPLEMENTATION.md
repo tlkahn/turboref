@@ -82,7 +82,7 @@ The offset computation builds two lookup tables:
 - `utf16_offsets[char_index] → utf16_position`
 - `byte_to_char[byte_index] → char_index`
 
-### Renderer: Range Detection
+### Renderer: Range Detection and Navigation Targets
 
 When rendering batch citations like `[@fig:a;@fig:b;@fig:c]`:
 1. Group refs by `RefType`
@@ -90,6 +90,8 @@ When rendering batch citations like `[@fig:a;@fig:b;@fig:c]`:
 3. If all are `Simple(n)` and consecutive → render as range "1-3"
 4. Otherwise → comma-separated "1, 3, 5"
 5. Select prefix from config array by count: index `min(count-1, len-1)` for singular/plural
+
+Each `ResolvedCitation` also carries `target_line` and `target_char_offset` — the position of the first resolved definition. This enables click-to-navigate: the TS widget reads these fields and dispatches a scroll + cursor placement on mouse click. For batch citations, the first ref's definition is used as the navigation target.
 
 ### Definition Tag Scanner
 
@@ -149,7 +151,13 @@ CodeMirror 6 `EditorView.decorations.compute(["doc", "selection"])`:
 
 **CrossrefWidget** renders citations as styled `<span class="turboref-citation">` (accent color, solid border). **DefinitionWidget** renders definition tags as `<span class="turboref-definition">` (muted color, dashed border, smaller font).
 
-**Click-to-edit on widgets**: `Decoration.replace` widgets swallow mouse events — CM6 does not place the cursor inside a replaced range on click (arrow keys work because they traverse positions sequentially). The fix is to handle `mousedown` directly on the widget DOM element (`widgets.ts:toDOM()`), calling `preventDefault()` + `stopPropagation()` to block CM6's default handling, then using `setTimeout(0)` to dispatch a `view.dispatch({ selection: { anchor: charStart } })` after CM6's event cycle settles. The `EditorView` is available via the `toDOM(view)` parameter.
+**Click-to-navigate on citation widgets**: When a user mouse-clicks a rendered citation (e.g., "Fig. 1"), the plugin scrolls to the definition location and blinks the target line with a highlight animation. This uses `ResolvedCitation.target_char_offset` — populated in `renderer.rs` from the first resolved `Definition`'s `char_offset`. The widget dispatches `view.dispatch({ selection: { anchor: targetOffset }, scrollIntoView: true })`, then applies the `.turboref-highlight-blink` CSS class to the target `.cm-line` element via `requestAnimationFrame`. The highlight fades out over 1.5s via CSS `@keyframes`.
+
+Arrow-key cursor movement into a citation still expands it in-place (the cursor-aware decoration skip handles this). Only the `mousedown` handler on the widget triggers navigation.
+
+**Reading mode click-to-navigate**: Citation spans in reading mode have `click` handlers that call `navigateToLine()`, which opens the file in editing mode at the target line via `leaf.openFile(file, { eState: { line: targetLine } })`, then applies the same highlight blink on the target line's `.cm-line` DOM element.
+
+**Click-to-edit on definition widgets**: `DefinitionWidget` click places the cursor at the tag itself (it's already at the definition). `Decoration.replace` widgets swallow mouse events — CM6 does not place the cursor inside a replaced range on click. The fix is to handle `mousedown` directly on the widget DOM element, calling `preventDefault()` + `stopPropagation()` then `setTimeout(0)` to dispatch after CM6's event cycle.
 
 ### EditorSuggest (`suggest.ts`)
 
@@ -181,7 +189,7 @@ esbuild treats the wasm-pack `.js` output as a regular module and inlines it int
 
 ## Test Coverage
 
-154 unit tests in `crates/core`, run via `cargo test -p turboref-core`. No WASM or browser required — the core crate is pure Rust with zero platform dependencies.
+158 unit tests in `crates/core`, run via `cargo test -p turboref-core`. No WASM or browser required — the core crate is pure Rust with zero platform dependencies.
 
 | Module | Tests |
 |--------|-------|
@@ -196,7 +204,7 @@ esbuild treats the wasm-pack `.js` output as a regular module and inlines it int
 | parser/listing | 8 |
 | citation | 13 |
 | definition_tag | 21 |
-| renderer | 11 |
+| renderer | 15 |
 | template | 8 |
 | document (e2e) | 3 |
 | resolver | 2 |

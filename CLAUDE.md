@@ -11,7 +11,7 @@ Supports 5 reference types: `fig`, `tbl`, `sec`, `eq`, `lst` — plus trait-base
 ## Build Commands
 
 ```bash
-cargo test -p turboref-core          # Run all 154 Rust unit tests
+cargo test -p turboref-core          # Run all 158 Rust unit tests
 wasm-pack build crates/wasm --target web --release   # Build WASM
 node esbuild.config.mjs production   # Bundle TypeScript
 ./install.sh                         # Full build + install to Obsidian vault
@@ -23,8 +23,8 @@ node esbuild.config.mjs production   # Bundle TypeScript
 Two-crate Rust workspace + TypeScript:
 
 - **`crates/core`** — Pure Rust library (zero WASM deps). All parsing, numbering, citation resolution, rendering, template expansion. This is the TDD target.
-- **`crates/wasm`** — Thin `wasm-bindgen` wrapper. Exports 5 functions (`parse_document`, `resolve_citations`, `get_definitions`, `resolve_all_decorations`, `expand_template`), JSON in/out.
-- **`src/`** — TypeScript. Obsidian plugin lifecycle, CodeMirror 6 live rendering, MarkdownPostProcessor for reading mode, EditorSuggest for `[@` completion, image/table event listeners, settings UI.
+- **`crates/wasm`** — Thin `wasm-bindgen` wrapper. Exports 5 functions (`parse_document`, `resolve_citations`, `get_definitions`, `resolve_all_decorations`, `expand_template`), JSON in/out. `ResolvedCitation` includes `target_line`/`target_char_offset` for click-to-navigate.
+- **`src/`** — TypeScript. Obsidian plugin lifecycle, CodeMirror 6 live rendering, MarkdownPostProcessor for reading mode, EditorSuggest for `[@` completion, image/table event listeners, settings UI. Clicking a citation navigates to the definition with a highlight blink.
 
 ### Data Flow
 
