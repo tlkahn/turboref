@@ -7,10 +7,11 @@ Built with a **Rust/WASM core** for fast, reliable parsing and a TypeScript UI l
 ## Features
 
 - **All pandoc-crossref types**: figures, tables, sections, equations, code listings
+- **Citeproc bibliography support**: auto-complete and render bibliographic citations from `.bib` files — type `[@bib:` to search entries, rendered as "Author Year" inline
 - **Live editing preview**: both citations (`[@fig:cat]` → "Fig. 1") and definition tags (`{#fig:cat}` → "#Fig. 1") render inline, expanding when your cursor enters them
-- **Click-to-navigate**: click a citation to scroll to its definition with a highlight blink — like Obsidian's `^block` navigation
-- **Reading mode rendering**: full cross-reference resolution in preview
-- **Auto-completion**: type `[@` to get suggestions for all defined references
+- **Click-to-navigate**: click a crossref citation to scroll to its definition; click a bib citation to open the `.bib` file in your default editor
+- **Reading mode rendering**: full cross-reference and citeproc resolution in preview
+- **Auto-completion**: type `[@` to get suggestions for all defined references and bibliography entries
 - **Batch references**: `[@fig:a;@fig:b;@fig:c]` renders as "Figs. 1-3" (consecutive range detection)
 - **Sub-figures**: group consecutive images with a caption line for letter-suffixed numbering (1a, 1b, ...)
 - **Auto-labeling**: figures and tables get IDs automatically on paste/drop/creation
@@ -89,6 +90,45 @@ Group consecutive images with a `: Caption {#fig:id}` line:
 
 A blank line between images breaks the group. The `<div id="fig:...">` HTML syntax is also supported for pandoc export compatibility.
 
+### Bibliography Citations (Citeproc)
+
+TurboRef supports [pandoc-citeproc](https://pandoc.org/chunkedhtml-demo/13-citations.html) bibliographic citations from `.bib` files.
+
+**Setup**: add a `bibliography` field to your document's frontmatter pointing to a `.bib` file (resolved relative to the note's directory):
+
+```yaml
+---
+bibliography: refs.bib
+---
+```
+
+Multiple files are supported:
+
+```yaml
+---
+bibliography:
+  - primary.bib
+  - secondary.bib
+---
+```
+
+**Auto-completion**: type `[@`, select `bib`, then type a partial cite key. Bib entries are marked with a `󰑴` icon. Selecting an entry inserts the bare key — producing valid citeproc syntax:
+
+```markdown
+[@sanderson2009]                    → "Sanderson 2009"
+[@sanderson2009; @flood1996]        → "Sanderson 2009; Flood 1996"
+```
+
+**Rendered form**: citations display as "Author Year" when the cursor is outside:
+- Single author: "Sanderson 2009"
+- Two authors: "Sanderson & Jordan 2009"
+- Three+: "Sanderson et al. 2009"
+- Same author+year disambiguation: "Sanderson 2009a", "Sanderson 2009b"
+
+**Click navigation**: clicking a rendered bib citation opens the `.bib` file in your system's default text editor, with a notification showing the entry's line number.
+
+**Caching**: parsed `.bib` entries are cached in memory by default. Optionally enable Redis caching in settings for persistence across restarts.
+
 ## Installation
 
 ### Manual
@@ -112,8 +152,14 @@ npm install
 ## Development
 
 ```bash
-# Run Rust tests (158 unit tests)
+# Run all tests (Rust + TypeScript)
+npm test
+
+# Run Rust tests only (166 unit tests)
 cargo test -p turboref-core
+
+# Run TypeScript tests only (43 unit tests — bib parser, renderer, resolver)
+npx vitest run
 
 # Build WASM
 wasm-pack build crates/wasm --target web --release
@@ -138,6 +184,7 @@ tblPrefix: ["Table", "Tables"]
 eqPrefix: ["Eq.", "Eqs."]
 lstPrefix: ["Listing", "Listings"]
 secPrefix: ["Section", "Sections"]
+bibliography: refs.bib          # or an array: [a.bib, b.bib]
 ---
 ```
 
@@ -145,8 +192,9 @@ secPrefix: ["Section", "Sections"]
 
 TurboRef separates concerns into two layers:
 
-- **Rust core** (`crates/core`): All parsing, numbering, reference resolution, and text rendering. Compiled to WebAssembly. 158 unit tests.
+- **Rust core** (`crates/core`): All crossref parsing, numbering, reference resolution, and text rendering. Compiled to WebAssembly. 166 unit tests.
 - **TypeScript shell** (`src/`): Obsidian plugin lifecycle, CodeMirror 6 live decorations, DOM post-processing, auto-completion, event listeners, settings UI.
+- **Bib pipeline** (`src/bib/`): TypeScript-only citeproc support — BibTeX parsing, "Author Year" rendering with disambiguation, frontmatter path resolution, in-memory/Redis caching. 43 unit tests.
 
 The WASM boundary uses stateless JSON calls — the TypeScript side sends document content + config, gets back resolved references. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 
@@ -161,7 +209,9 @@ The WASM boundary uses stateless JSON calls — the TypeScript side sends docume
 ### TypeScript
 - `obsidian` — Obsidian plugin API
 - `@codemirror/*` — CodeMirror 6 editor extensions (provided by Obsidian)
+- `ioredis` — Redis client for optional bib entry caching
 - `esbuild` — TypeScript bundling
+- `vitest` — TypeScript unit testing (dev)
 
 ## License
 

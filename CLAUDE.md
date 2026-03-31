@@ -6,12 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TurboRef is an Obsidian plugin for pandoc-crossref-compatible cross-referencing. It has a **Rust/WASM core** for all parsing and resolution logic, and a **TypeScript UI layer** for Obsidian integration.
 
-Supports 5 reference types: `fig`, `tbl`, `sec`, `eq`, `lst` — plus trait-based extensibility for custom types.
+Supports 5 crossref types: `fig`, `tbl`, `sec`, `eq`, `lst` — plus trait-based extensibility for custom types. Also supports **citeproc** bibliographic citations from `.bib` files (parsed and rendered on the TypeScript side).
 
 ## Build Commands
 
 ```bash
-cargo test -p turboref-core          # Run all 158 Rust unit tests
+cargo test -p turboref-core          # Run 166 Rust unit tests
+npx vitest run                       # Run 43 TypeScript unit tests (bib parser/renderer/resolver)
+npm test                             # Run both Rust + TypeScript tests
 wasm-pack build crates/wasm --target web --release   # Build WASM
 node esbuild.config.mjs production   # Bundle TypeScript
 ./install.sh                         # Full build + install to Obsidian vault
@@ -25,6 +27,7 @@ Two-crate Rust workspace + TypeScript:
 - **`crates/core`** — Pure Rust library (zero WASM deps). All parsing, numbering, citation resolution, rendering, template expansion. This is the TDD target.
 - **`crates/wasm`** — Thin `wasm-bindgen` wrapper. Exports 5 functions (`parse_document`, `resolve_citations`, `get_definitions`, `resolve_all_decorations`, `expand_template`), JSON in/out. `ResolvedCitation` includes `target_line`/`target_char_offset` for click-to-navigate.
 - **`src/`** — TypeScript. Obsidian plugin lifecycle, CodeMirror 6 live rendering, MarkdownPostProcessor for reading mode, EditorSuggest for `[@` completion, image/table event listeners, settings UI. Clicking a citation navigates to the definition with a highlight blink.
+- **`src/bib/`** — TypeScript-only citeproc pipeline. BibTeX parser, "Author Year" renderer with disambiguation, frontmatter `bibliography` path resolver, in-memory/Redis cache. No Rust involvement — bib entries are external data, not in-document definitions.
 
 ### Data Flow
 
@@ -87,15 +90,22 @@ crates/core/src/
   i18n.rs          # Locale-specific defaults (en, zh)
 
 src/
-  main.ts          # Plugin entry, wires all components
+  main.ts          # Plugin entry, wires all components + bib event handlers
   bridge.ts        # WASM loader (initSync) + typed wrappers
   config.ts        # PluginSettings, buildDocumentConfigJson()
-  suggest.ts       # EditorSuggest for [@... autocompletion
-  settings.ts      # Settings UI tab
+  suggest.ts       # EditorSuggest for [@... autocompletion (crossref types + bib keys)
+  settings.ts      # Settings UI tab (incl. citeproc + Redis settings)
   renderer/
-    reading-mode.ts  # MarkdownPostProcessor
-    live-mode.ts     # CodeMirror 6 decorations
-    widgets.ts       # CrossrefWidget + DefinitionWidget
+    reading-mode.ts  # MarkdownPostProcessor (crossref + citeproc passes)
+    live-mode.ts     # CodeMirror 6 decorations (crossref + citeproc passes)
+    widgets.ts       # CrossrefWidget, DefinitionWidget, CiteprocWidget
+  bib/
+    types.ts       # BibEntry interface
+    parser.ts      # BibTeX file parser
+    renderer.ts    # "Author Year" formatter with disambiguation
+    resolver.ts    # Frontmatter bibliography path resolution
+    cache.ts       # MemoryBibCache (default) + RedisBibCache (opt-in)
+    __tests__/     # vitest unit tests (parser, renderer, resolver)
   listeners/
     image.ts       # Paste/drop → auto {#fig:id}
     table.ts       # Table detection → auto caption

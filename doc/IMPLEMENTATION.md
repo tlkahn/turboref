@@ -187,12 +187,84 @@ node esbuild.config.mjs production
 
 esbuild treats the wasm-pack `.js` output as a regular module and inlines it into `main.js`. The `.wasm` binary is loaded at runtime from the plugin directory.
 
+## Citeproc (Bibliography) Support
+
+Citeproc citations are handled entirely on the TypeScript side via a separate pipeline — no Rust code changes were needed.
+
+### Architecture: Why a Separate Pipeline
+
+The Rust core is built around in-document definitions (`{#type:id}`) with numbered references (`RefNumber`). Bibliographic entries live in external `.bib` files, have no in-document definitions, and render as "Author Year" instead of numbered labels. Contaminating `ReferenceMap` with bib data would break the crossref semantics. The Rust citation parser's `REF_PART_RE` regex requires a colon (`type:id`), so bare citeproc keys like `sanderson2009` naturally pass through unmatched.
+
+### BibTeX Parsing (`src/bib/parser.ts`)
+
+Hand-written parser that extracts cite key, authors, title, year, entry type, and line number from `.bib` files. Handles:
+- Brace-delimited and quote-delimited field values
+- Nested braces (e.g., `{The {LaTeX} Way}`)
+- Multi-line values with whitespace normalization
+- `and`-separated author lists
+- Bare numeric values (e.g., `year = 2020`)
+- Case-insensitive entry types and field names
+- Skips `@comment`, `@string`, `@preamble`
+
+### Rendered Form (`src/bib/renderer.ts`)
+
+Formats citations as "Author Year" with disambiguation:
+- Single author: "Sanderson 2009"
+- Two authors: "Sanderson & Jordan 2009"
+- Three+: "Sanderson et al. 2009"
+- Same author+year: letter suffix ordered alphabetically by cite key — "Sanderson 2009a", "Sanderson 2009b"
+- Missing author: falls back to raw cite key
+- Missing year: "Author n.d."
+
+`renderBibCitations()` takes all entries, groups by base rendered form, and assigns letter suffixes only where disambiguation is needed.
+
+### Path Resolution (`src/bib/resolver.ts`)
+
+`extractBibliographyField()` reads the `bibliography` frontmatter field (string or array). `resolveBibPaths()` resolves each path relative to the note's directory (standard Pandoc behavior), handling `..` segments.
+
+### Caching (`src/bib/cache.ts`)
+
+Two-tier `BibCache` interface:
+- **`MemoryBibCache`** (default) — `Map<string, { entries, mtime }>`. Fast, no dependencies.
+- **`RedisBibCache`** (opt-in via settings) — Uses `ioredis`. Redis key: `turboref:bib:<vault-relative-path>`. Falls back to `MemoryBibCache` if Redis is unavailable.
+
+Cache invalidation: entries are re-parsed when the `.bib` file's `mtime` is newer than the cached timestamp, or when a `vault.on('modify')` event fires for a `.bib` file.
+
+### Autocompletion Trigger
+
+`bib` is added to `AVAILABLE_TYPES` alongside `fig`, `tbl`, `sec`, `eq`, `lst`. Flow:
+1. User types `[@` → sees type suggestions including `bib`
+2. Selects `bib` → inserts `bib:` → text is `[@bib:`
+3. Types partial key → filtered bib entries appear (prefixed with Nerd Font `󰑴` icon)
+4. Selects entry → **bare key** is inserted (strips `bib:` prefix) → result: `[@sanderson2009]`
+
+The `bib:` prefix is only a completion trigger — the document stores valid pandoc-citeproc syntax (`[@key]`).
+
+### Rendering Detection
+
+Since the document contains `[@sanderson2009]` (no colon), the renderer identifies citeproc citations as `[@key]` patterns where the key has no colon and was not matched by the Rust crossref pipeline. Both live mode and reading mode perform a second pass after crossref rendering to catch these.
+
+### Click Navigation
+
+`CiteprocWidget` (live mode) and citeproc spans (reading mode) open the `.bib` file in the system default application via `app.openWithDefaultApp()`, with a `Notice` showing the entry's line number.
+
+### Event Wiring (`main.ts`)
+
+- `workspace.on('file-open')`: loads bib entries for the active note
+- `metadataCache.on('changed')`: reloads when frontmatter changes
+- `vault.on('modify')` for `.bib` files: invalidates cache and reloads
+
+The plugin exposes `currentBibEntries: BibEntry[]` and `bibRenderedForms: Map<string, string>` for the suggest and renderer systems.
+
 ## Test Coverage
 
-158 unit tests in `crates/core`, run via `cargo test -p turboref-core`. No WASM or browser required — the core crate is pure Rust with zero platform dependencies.
+166 Rust unit tests in `crates/core`, run via `cargo test -p turboref-core`. No WASM or browser required — the core crate is pure Rust with zero platform dependencies.
+
+43 TypeScript unit tests in `src/bib/__tests__/`, run via `npx vitest run`.
 
 | Module | Tests |
 |--------|-------|
+| **Rust** | |
 | types | 4 |
 | config | 5 |
 | i18n | 2 |
@@ -208,3 +280,7 @@ esbuild treats the wasm-pack `.js` output as a regular module and inlines it int
 | template | 8 |
 | document (e2e) | 3 |
 | resolver | 2 |
+| **TypeScript** | |
+| bib/parser | 21 |
+| bib/renderer | 13 |
+| bib/resolver | 9 |

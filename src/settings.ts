@@ -132,6 +132,46 @@ export class TurboRefSettingTab extends PluginSettingTab {
                     })
             );
 
+        // --- Citeproc ---
+        containerEl.createEl("h3", { text: "Citeproc (bibliography)" });
+
+        new Setting(containerEl)
+            .setName("Enable citeproc rendering")
+            .setDesc("Render bibliographic citations from .bib files as 'Author Year'")
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.plugin.settings.enableCiteprocRendering)
+                    .onChange(async (value) => {
+                        this.plugin.settings.enableCiteprocRendering = value;
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        new Setting(containerEl)
+            .setName("Enable Redis cache")
+            .setDesc("Cache parsed .bib entries in Redis for persistence across restarts")
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.plugin.settings.redisEnabled)
+                    .onChange(async (value) => {
+                        this.plugin.settings.redisEnabled = value;
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        new Setting(containerEl)
+            .setName("Redis URL")
+            .setDesc("Redis connection URL (only used when Redis cache is enabled)")
+            .addText((text) =>
+                text
+                    .setPlaceholder("redis://localhost:6379")
+                    .setValue(this.plugin.settings.redisUrl)
+                    .onChange(async (value) => {
+                        this.plugin.settings.redisUrl = value;
+                        await this.plugin.saveSettings();
+                    })
+            );
+
         // --- Pandoc-crossref ---
         containerEl.createEl("h3", { text: "Pandoc-crossref" });
 

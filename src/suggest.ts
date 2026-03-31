@@ -12,13 +12,13 @@ import { buildDocumentConfigJson } from "./config";
 import type { DefinitionInfo } from "./bridge";
 
 interface SuggestionItem {
-    type: "type" | "ref";
+    type: "type" | "ref" | "bib";
     label: string;
     description: string;
     insertText: string;
 }
 
-const AVAILABLE_TYPES = ["fig", "tbl", "sec", "eq", "lst"];
+const AVAILABLE_TYPES = ["fig", "tbl", "sec", "eq", "lst", "bib"];
 
 export class ReferenceSuggest extends EditorSuggest<SuggestionItem> {
     private plugin: TurboRefPlugin;
@@ -79,6 +79,18 @@ export class ReferenceSuggest extends EditorSuggest<SuggestionItem> {
 
         if (!AVAILABLE_TYPES.includes(typeStr)) return [];
 
+        // Bib entries: fetch from pre-loaded cache, insert bare key (no bib: prefix)
+        if (typeStr === "bib") {
+            return (this.plugin.currentBibEntries ?? [])
+                .filter((e) => !partialId || e.key.toLowerCase().includes(partialId.toLowerCase()))
+                .map((e) => ({
+                    type: "bib" as const,
+                    label: e.key,
+                    description: this.plugin.bibRenderedForms?.get(e.key) ?? e.key,
+                    insertText: e.key,
+                }));
+        }
+
         const file = context.file;
         if (!file) return [];
 
@@ -111,7 +123,8 @@ export class ReferenceSuggest extends EditorSuggest<SuggestionItem> {
     }
 
     renderSuggestion(item: SuggestionItem, el: HTMLElement): void {
-        el.createEl("span", { text: item.label, cls: "turboref-suggest-label" });
+        const label = item.type === "bib" ? `\u{F0474} ${item.label}` : item.label;
+        el.createEl("span", { text: label, cls: "turboref-suggest-label" });
         el.createEl("small", { text: ` ${item.description}`, cls: "turboref-suggest-desc" });
     }
 
@@ -134,6 +147,7 @@ function typeDescription(type: string): string {
         case "sec": return "Section";
         case "eq": return "Equation";
         case "lst": return "Listing";
+        case "bib": return "Bibliography";
         default: return type;
     }
 }

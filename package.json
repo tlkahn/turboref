@@ -10,7 +10,9 @@
     "dev:wasm": "cargo watch -w crates -s 'npm run build:wasm'",
     "dev:ts": "node esbuild.config.mjs",
     "dev": "concurrently 'npm run dev:wasm' 'npm run dev:ts'",
-    "test": "cargo test -p turboref-core",
+    "test": "cargo test -p turboref-core && vitest run",
+    "test:ts": "vitest run",
+    "test:rust": "cargo test -p turboref-core",
     "version": "node version-bump.mjs && git add manifest.json versions.json",
     "release": "node scripts/release.js"
   },
@@ -26,9 +28,11 @@
     "esbuild": "0.17.3",
     "obsidian": "latest",
     "tslib": "2.4.0",
-    "typescript": "4.7.4"
+    "typescript": "4.7.4",
+    "vitest": "^4.1.2"
   },
   "dependencies": {
-    "@codemirror/language": "^6.10.8"
+    "@codemirror/language": "^6.10.8",
+    "ioredis": "^5.10.1"
   }
 }

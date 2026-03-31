@@ -31,6 +31,11 @@ export interface PluginSettings {
     nameInLink: boolean;
     subfigGrid: boolean;
 
+    // Citeproc settings
+    enableCiteprocRendering: boolean;
+    redisEnabled: boolean;
+    redisUrl: string;
+
     // Image settings
     saveImageNameFormat: string;
 }
@@ -62,6 +67,10 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     linkReferences: false,
     nameInLink: false,
     subfigGrid: false,
+
+    enableCiteprocRendering: true,
+    redisEnabled: false,
+    redisUrl: "redis://localhost:6379",
 
     saveImageNameFormat: "{filename}-{index}.{ext}",
 };

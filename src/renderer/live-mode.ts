@@ -2,7 +2,7 @@ import { EditorView, Decoration, ViewPlugin, ViewUpdate } from "@codemirror/view
 import { Extension, RangeSetBuilder } from "@codemirror/state";
 import type TurboRefPlugin from "../main";
 import { buildDocumentConfigJson } from "../config";
-import { CrossrefWidget, DefinitionWidget } from "./widgets";
+import { CrossrefWidget, DefinitionWidget, CiteprocWidget } from "./widgets";
 
 /**
  * Creates CodeMirror 6 extensions for live cross-reference rendering in editing mode.
@@ -91,6 +91,65 @@ function createDecorationExtension(plugin: TurboRefPlugin): Extension {
                         ),
                     }),
                 });
+            }
+
+            // Citeproc citation pass: find [@barekey] patterns not matched by crossref
+            if (plugin.settings.enableCiteprocRendering && plugin.currentBibEntries?.length) {
+                const crossrefOriginals = new Set(all.citations.map((c: any) => c.original));
+                const bibRe = /\[@([a-zA-Z][\w.\-]*(?:\s*;\s*@?[a-zA-Z][\w.\-]*)*)\]/g;
+                let bibMatch;
+
+                while ((bibMatch = bibRe.exec(content)) !== null) {
+                    const fullMatch = bibMatch[0];
+                    const inner = bibMatch[1];
+
+                    // Skip if this was already matched by crossref (contains colon)
+                    if (crossrefOriginals.has(fullMatch)) continue;
+                    if (inner.includes(":")) continue;
+
+                    const start = bibMatch.index;
+                    const end = start + fullMatch.length;
+
+                    if (isInEditableRange(start, end, cursorPos, selStart, selEnd)) continue;
+                    if (start < 0 || end > state.doc.length || start >= end) continue;
+
+                    // Look up each key in the bib entries
+                    const keys = inner.split(/\s*;\s*/).map((k: string) => k.replace(/^@/, ""));
+                    const renderedParts: string[] = [];
+                    let bibFile = "";
+                    let bibLine = 0;
+
+                    for (const key of keys) {
+                        const bibEntry = plugin.currentBibEntries.find((e) => e.key === key);
+                        if (bibEntry) {
+                            renderedParts.push(plugin.bibRenderedForms?.get(key) ?? key);
+                            if (!bibFile) {
+                                bibFile = bibEntry.bibFile ?? "";
+                                bibLine = bibEntry.lineNumber;
+                            }
+                        } else {
+                            renderedParts.push(key);
+                        }
+                    }
+
+                    if (renderedParts.length > 0) {
+                        entries.push({
+                            start,
+                            end,
+                            decoration: Decoration.replace({
+                                widget: new CiteprocWidget(
+                                    fullMatch,
+                                    renderedParts.join("; "),
+                                    start,
+                                    end,
+                                    bibFile,
+                                    bibLine,
+                                    plugin.app
+                                ),
+                            }),
+                        });
+                    }
+                }
             }
 
             // RangeSetBuilder requires sorted order by start position

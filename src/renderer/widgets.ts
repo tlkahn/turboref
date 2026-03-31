@@ -1,4 +1,5 @@
 import { EditorView, WidgetType } from "@codemirror/view";
+import { App, Notice } from "obsidian";
 
 /**
  * Highlight a line at the given position with a blink animation.
@@ -124,6 +125,54 @@ export class DefinitionWidget extends WidgetType {
             this.isValid === other.isValid &&
             this.charStart === other.charStart &&
             this.charEnd === other.charEnd
+        );
+    }
+}
+
+/**
+ * CodeMirror widget for rendering a citeproc (bibliographic) citation inline.
+ * Click opens the .bib file in the system default application.
+ */
+export class CiteprocWidget extends WidgetType {
+    constructor(
+        private readonly original: string,
+        private readonly renderedText: string,
+        private readonly charStart: number,
+        private readonly charEnd: number,
+        private readonly bibFilePath: string,
+        private readonly lineNumber: number,
+        private readonly app: App
+    ) {
+        super();
+    }
+
+    toDOM(view: EditorView): HTMLElement {
+        const span = document.createElement("span");
+        span.className = "turboref-citeproc";
+        span.textContent = this.renderedText;
+        span.title = this.original;
+        span.setAttribute("data-original-ref", this.original);
+        span.style.cursor = "pointer";
+
+        span.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setTimeout(() => {
+                (this.app as any).openWithDefaultApp(this.bibFilePath);
+                new Notice(`Opened ${this.bibFilePath} — entry at line ${this.lineNumber + 1}`);
+            }, 0);
+        });
+
+        return span;
+    }
+
+    eq(other: CiteprocWidget): boolean {
+        return (
+            this.original === other.original &&
+            this.renderedText === other.renderedText &&
+            this.charStart === other.charStart &&
+            this.charEnd === other.charEnd &&
+            this.bibFilePath === other.bibFilePath
         );
     }
 }

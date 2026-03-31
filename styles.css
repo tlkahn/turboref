@@ -46,6 +46,20 @@
     opacity: 1.0;
 }
 
+/* Citeproc (bibliographic) citation styles */
+.turboref-citeproc {
+    color: var(--text-accent);
+    background-color: var(--background-modifier-accent);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-weight: 500;
+    border: 1px dotted var(--text-accent);
+}
+
+.turboref-citeproc:hover {
+    opacity: 0.8;
+}
+
 /* Highlight blink animation for navigation targets */
 @keyframes turboref-blink {
     0%   { background-color: var(--text-highlight-bg); }
