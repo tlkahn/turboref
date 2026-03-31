@@ -123,8 +123,10 @@ export class ReferenceSuggest extends EditorSuggest<SuggestionItem> {
     }
 
     renderSuggestion(item: SuggestionItem, el: HTMLElement): void {
-        const label = item.type === "bib" ? `\u{F0474} ${item.label}` : item.label;
-        el.createEl("span", { text: label, cls: "turboref-suggest-label" });
+        if (item.type === "bib") {
+            el.addClass("turboref-suggest-bib");
+        }
+        el.createEl("span", { text: item.label, cls: "turboref-suggest-label" });
         el.createEl("small", { text: ` ${item.description}`, cls: "turboref-suggest-desc" });
     }
 

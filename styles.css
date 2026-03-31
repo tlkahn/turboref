@@ -60,6 +60,12 @@
     text-decoration: underline;
 }
 
+/* Suggest dropdown: bib entry distinction */
+.turboref-suggest-bib {
+    border-left: 2px solid var(--text-accent);
+    padding-left: 6px;
+}
+
 /* Highlight blink animation for navigation targets */
 @keyframes turboref-blink {
     0%   { background-color: var(--text-highlight-bg); }

@@ -112,7 +112,7 @@ bibliography:
 ---
 ```
 
-**Auto-completion**: type `[@`, select `bib`, then type a partial cite key. Bib entries are marked with a `󰑴` icon. Selecting an entry inserts the bare key — producing valid citeproc syntax:
+**Auto-completion**: type `[@`, select `bib`, then type a partial cite key. Bib entries are visually distinguished by an accent-colored left border. Selecting an entry inserts the bare key — producing valid citeproc syntax:
 
 ```markdown
 [@sanderson2009]                    → "Sanderson 2009"

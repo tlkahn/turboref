@@ -235,7 +235,7 @@ Cache invalidation: entries are re-parsed when the `.bib` file's `mtime` is newe
 `bib` is added to `AVAILABLE_TYPES` alongside `fig`, `tbl`, `sec`, `eq`, `lst`. Flow:
 1. User types `[@` → sees type suggestions including `bib`
 2. Selects `bib` → inserts `bib:` → text is `[@bib:`
-3. Types partial key → filtered bib entries appear (prefixed with Nerd Font `󰑴` icon)
+3. Types partial key → filtered bib entries appear (distinguished by an accent-colored left border via CSS)
 4. Selects entry → **bare key** is inserted (strips `bib:` prefix) → result: `[@sanderson2009]`
 
 The `bib:` prefix is only a completion trigger — the document stores valid pandoc-citeproc syntax (`[@key]`).
