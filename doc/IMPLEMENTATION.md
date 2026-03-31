@@ -246,7 +246,17 @@ Since the document contains `[@sanderson2009]` (no colon), the renderer identifi
 
 ### Click Navigation
 
-`CiteprocWidget` (live mode) and citeproc spans (reading mode) open the `.bib` file in the system default application via `app.openWithDefaultApp()`, with a `Notice` showing the entry's line number.
+Clicking a rendered citeproc citation opens the `.bib` file at the entry's line in an external editor via a configurable shell command (`bibEditorCommand` setting, default: `subl {file}:{line}`). The `{file}` and `{line}` placeholders are replaced with the absolute path and 1-indexed line number.
+
+**Login shell execution**: The command is run through the user's login shell (`$SHELL -l -c ...` via `spawn`) because Obsidian, launched from Finder/Dock on macOS, does not inherit the terminal's PATH. Without this, commands like `subl` or `code` would fail with "command not found".
+
+**Batch citation per-part navigation**: In batch citations like `[@a; @b; @c]`, each rendered part is a separate `<span class="turboref-citeproc-part">` with its own click handler pointing to the correct entry's line in the `.bib` file. The outer `<span class="turboref-citeproc">` wrapper provides the shared styling (border, background). Parts are joined by `"; "` text nodes. Hovering a part underlines it to indicate individual clickability.
+
+Supported editor command examples:
+- Sublime Text: `subl {file}:{line}`
+- VS Code: `code -g {file}:{line}`
+- Emacsclient: `emacsclient +{line} {file}`
+- Vim: `vim +{line} {file}`
 
 ### Event Wiring (`main.ts`)
 

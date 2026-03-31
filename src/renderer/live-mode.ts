@@ -2,7 +2,7 @@ import { EditorView, Decoration, ViewPlugin, ViewUpdate } from "@codemirror/view
 import { Extension, RangeSetBuilder } from "@codemirror/state";
 import type TurboRefPlugin from "../main";
 import { buildDocumentConfigJson } from "../config";
-import { CrossrefWidget, DefinitionWidget, CiteprocWidget } from "./widgets";
+import { CrossrefWidget, DefinitionWidget, CiteprocWidget, CiteprocPart } from "./widgets";
 
 /**
  * Creates CodeMirror 6 extensions for live cross-reference rendering in editing mode.
@@ -115,36 +115,31 @@ function createDecorationExtension(plugin: TurboRefPlugin): Extension {
 
                     // Look up each key in the bib entries
                     const keys = inner.split(/\s*;\s*/).map((k: string) => k.replace(/^@/, ""));
-                    const renderedParts: string[] = [];
-                    let bibFile = "";
-                    let bibLine = 0;
+                    const parts: CiteprocPart[] = [];
 
                     for (const key of keys) {
                         const bibEntry = plugin.currentBibEntries.find((e) => e.key === key);
-                        if (bibEntry) {
-                            renderedParts.push(plugin.bibRenderedForms?.get(key) ?? key);
-                            if (!bibFile) {
-                                bibFile = bibEntry.bibFile ?? "";
-                                bibLine = bibEntry.lineNumber;
-                            }
-                        } else {
-                            renderedParts.push(key);
-                        }
+                        parts.push({
+                            rendered: bibEntry
+                                ? (plugin.bibRenderedForms?.get(key) ?? key)
+                                : key,
+                            bibFile: bibEntry?.bibFile ?? "",
+                            lineNumber: bibEntry?.lineNumber ?? 0,
+                        });
                     }
 
-                    if (renderedParts.length > 0) {
+                    if (parts.length > 0) {
                         entries.push({
                             start,
                             end,
                             decoration: Decoration.replace({
                                 widget: new CiteprocWidget(
                                     fullMatch,
-                                    renderedParts.join("; "),
+                                    parts,
                                     start,
                                     end,
-                                    bibFile,
-                                    bibLine,
-                                    plugin.app
+                                    plugin.app.vault.adapter as any,
+                                    plugin.settings.bibEditorCommand
                                 ),
                             }),
                         });

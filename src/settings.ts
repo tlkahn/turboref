@@ -148,6 +148,19 @@ export class TurboRefSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
+            .setName("Bib editor command")
+            .setDesc("Command to open .bib files at a line. Use {file} and {line} placeholders. Examples: subl {file}:{line}, code -g {file}:{line}, emacsclient +{line} {file}")
+            .addText((text) =>
+                text
+                    .setPlaceholder(DEFAULT_SETTINGS.bibEditorCommand)
+                    .setValue(this.plugin.settings.bibEditorCommand)
+                    .onChange(async (value) => {
+                        this.plugin.settings.bibEditorCommand = value;
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        new Setting(containerEl)
             .setName("Enable Redis cache")
             .setDesc("Cache parsed .bib entries in Redis for persistence across restarts")
             .addToggle((toggle) =>

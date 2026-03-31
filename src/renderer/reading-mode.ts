@@ -1,7 +1,7 @@
-import { MarkdownPostProcessorContext, MarkdownView, Notice, TFile } from "obsidian";
+import { FileSystemAdapter, MarkdownPostProcessorContext, MarkdownView, TFile } from "obsidian";
 import type TurboRefPlugin from "../main";
 import { buildDocumentConfigJson } from "../config";
-import type { BibEntry } from "../bib/types";
+import { openBibFileAtLine } from "../bib/open-external";
 
 // Regex to find definition markers in rendered text
 const DEF_MARKER_RE = /\s*\{#(?:fig|tbl|sec|eq|lst):[^}]+\}/g;
@@ -172,22 +172,29 @@ function replaceCitationsInDom(el: HTMLElement, resolved: ResolvedCitation[], pl
     }
 }
 
+interface CiteprocReplacement {
+    start: number;
+    end: number;
+    parts: { rendered: string; bibFile: string; lineNumber: number }[];
+}
+
 /**
  * Walk text nodes and replace [@barekey] citeproc citations with styled spans.
+ * Each key in a batch citation gets its own clickable span.
  */
 function replaceCiteprocInDom(
     el: HTMLElement,
     crossrefOriginals: Set<string>,
     plugin: TurboRefPlugin,
-    ctx: MarkdownPostProcessorContext
+    _ctx: MarkdownPostProcessorContext
 ) {
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    const nodesToReplace: { node: Text; replacements: { start: number; end: number; rendered: string; bibFile: string; lineNumber: number }[] }[] = [];
+    const nodesToReplace: { node: Text; replacements: CiteprocReplacement[] }[] = [];
 
     let node: Text | null;
     while ((node = walker.nextNode() as Text | null)) {
         const text = node.textContent || "";
-        const replacements: { start: number; end: number; rendered: string; bibFile: string; lineNumber: number }[] = [];
+        const replacements: CiteprocReplacement[] = [];
 
         const citeprocRe = /\[@([a-zA-Z][\w.\-]*(?:\s*;\s*@?[a-zA-Z][\w.\-]*)*)\]/g;
         let match;
@@ -199,30 +206,24 @@ function replaceCiteprocInDom(
             if (inner.includes(":")) continue;
 
             const keys = inner.split(/\s*;\s*/).map((k) => k.replace(/^@/, ""));
-            const renderedParts: string[] = [];
-            let bibFile = "";
-            let bibLine = 0;
+            const parts: { rendered: string; bibFile: string; lineNumber: number }[] = [];
 
             for (const key of keys) {
                 const bibEntry = plugin.currentBibEntries?.find((e) => e.key === key);
-                if (bibEntry) {
-                    renderedParts.push(plugin.bibRenderedForms?.get(key) ?? key);
-                    if (!bibFile) {
-                        bibFile = (bibEntry as any).bibFile ?? "";
-                        bibLine = bibEntry.lineNumber;
-                    }
-                } else {
-                    renderedParts.push(key);
-                }
+                parts.push({
+                    rendered: bibEntry
+                        ? (plugin.bibRenderedForms?.get(key) ?? key)
+                        : key,
+                    bibFile: bibEntry?.bibFile ?? "",
+                    lineNumber: bibEntry?.lineNumber ?? 0,
+                });
             }
 
-            if (renderedParts.length > 0) {
+            if (parts.length > 0) {
                 replacements.push({
                     start: match.index,
                     end: match.index + original.length,
-                    rendered: renderedParts.join("; "),
-                    bibFile,
-                    lineNumber: bibLine,
+                    parts,
                 });
             }
         }
@@ -232,29 +233,48 @@ function replaceCiteprocInDom(
         }
     }
 
+    const adapter = plugin.app.vault.adapter;
+    const isDesktop = adapter instanceof FileSystemAdapter;
+
     for (const { node, replacements } of nodesToReplace) {
         const text = node.textContent || "";
         const fragment = document.createDocumentFragment();
         let lastEnd = 0;
 
-        for (const { start, end, rendered, bibFile, lineNumber } of replacements) {
+        for (const { start, end, parts } of replacements) {
             if (start > lastEnd) {
                 fragment.appendChild(document.createTextNode(text.slice(lastEnd, start)));
             }
 
-            const span = document.createElement("span");
-            span.className = "turboref-citeproc";
-            span.textContent = rendered;
-            span.style.cursor = "pointer";
+            const wrapper = document.createElement("span");
+            wrapper.className = "turboref-citeproc";
 
-            if (bibFile) {
-                span.addEventListener("click", () => {
-                    (plugin.app as any).openWithDefaultApp(bibFile);
-                    new Notice(`Opened ${bibFile} — entry at line ${lineNumber + 1}`);
-                });
+            for (let i = 0; i < parts.length; i++) {
+                if (i > 0) {
+                    wrapper.appendChild(document.createTextNode("; "));
+                }
+
+                const part = parts[i];
+                const partSpan = document.createElement("span");
+                partSpan.className = "turboref-citeproc-part";
+                partSpan.textContent = part.rendered;
+                partSpan.style.cursor = "pointer";
+
+                if (part.bibFile && isDesktop) {
+                    partSpan.addEventListener("click", () => {
+                        openBibFileAtLine(
+                            adapter as FileSystemAdapter,
+                            part.bibFile,
+                            part.lineNumber,
+                            plugin.settings.bibEditorCommand
+                        );
+                    });
+                }
+
+                wrapper.appendChild(partSpan);
             }
 
-            fragment.appendChild(span);
+            fragment.appendChild(wrapper);
             lastEnd = end;
         }
 

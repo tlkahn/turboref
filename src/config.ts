@@ -33,6 +33,7 @@ export interface PluginSettings {
 
     // Citeproc settings
     enableCiteprocRendering: boolean;
+    bibEditorCommand: string;
     redisEnabled: boolean;
     redisUrl: string;
 
@@ -69,6 +70,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     subfigGrid: false,
 
     enableCiteprocRendering: true,
+    bibEditorCommand: "subl {file}:{line}",
     redisEnabled: false,
     redisUrl: "redis://localhost:6379",
 

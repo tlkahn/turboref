@@ -47,6 +47,7 @@ Document content + config JSON
 - **UTF-16 offsets** in all position data — matches CodeMirror 6's internal model.
 - **`getrandom` with `js` feature** in the wasm crate for `rand` support on WASM targets.
 - **`wasm-opt = false`** in Cargo.toml (wasm-pack's bundled binary doesn't support Apple Silicon). System `wasm-opt` run separately in `install.sh`.
+- **Bib click-to-navigate via login shell**: External editor commands are run through `$SHELL -l -c` (not `/bin/sh`) because Electron apps launched from Finder don't inherit the terminal's PATH. Configurable via `bibEditorCommand` setting (default: `subl {file}:{line}`).
 
 ### Parser Extensibility
 
@@ -98,13 +99,14 @@ src/
   renderer/
     reading-mode.ts  # MarkdownPostProcessor (crossref + citeproc passes)
     live-mode.ts     # CodeMirror 6 decorations (crossref + citeproc passes)
-    widgets.ts       # CrossrefWidget, DefinitionWidget, CiteprocWidget
+    widgets.ts       # CrossrefWidget, DefinitionWidget, CiteprocWidget (per-part click nav)
   bib/
     types.ts       # BibEntry interface
     parser.ts      # BibTeX file parser
     renderer.ts    # "Author Year" formatter with disambiguation
     resolver.ts    # Frontmatter bibliography path resolution
     cache.ts       # MemoryBibCache (default) + RedisBibCache (opt-in)
+    open-external.ts # Open .bib file at line via configurable editor command ($SHELL -l -c)
     __tests__/     # vitest unit tests (parser, renderer, resolver)
   listeners/
     image.ts       # Paste/drop → auto {#fig:id}

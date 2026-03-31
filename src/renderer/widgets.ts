@@ -1,5 +1,6 @@
 import { EditorView, WidgetType } from "@codemirror/view";
-import { App, Notice } from "obsidian";
+import { FileSystemAdapter } from "obsidian";
+import { openBibFileAtLine } from "../bib/open-external";
 
 /**
  * Highlight a line at the given position with a blink animation.
@@ -129,50 +130,71 @@ export class DefinitionWidget extends WidgetType {
     }
 }
 
+export interface CiteprocPart {
+    rendered: string;
+    bibFile: string;
+    lineNumber: number;
+}
+
 /**
  * CodeMirror widget for rendering a citeproc (bibliographic) citation inline.
- * Click opens the .bib file in the system default application.
+ * Each citation in a batch gets its own clickable span that navigates to
+ * the corresponding entry in the .bib file.
  */
 export class CiteprocWidget extends WidgetType {
     constructor(
         private readonly original: string,
-        private readonly renderedText: string,
+        private readonly parts: CiteprocPart[],
         private readonly charStart: number,
         private readonly charEnd: number,
-        private readonly bibFilePath: string,
-        private readonly lineNumber: number,
-        private readonly app: App
+        private readonly adapter: FileSystemAdapter,
+        private readonly editorCommand: string
     ) {
         super();
     }
 
     toDOM(view: EditorView): HTMLElement {
-        const span = document.createElement("span");
-        span.className = "turboref-citeproc";
-        span.textContent = this.renderedText;
-        span.title = this.original;
-        span.setAttribute("data-original-ref", this.original);
-        span.style.cursor = "pointer";
+        const wrapper = document.createElement("span");
+        wrapper.className = "turboref-citeproc";
+        wrapper.title = this.original;
+        wrapper.setAttribute("data-original-ref", this.original);
 
-        span.addEventListener("mousedown", (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setTimeout(() => {
-                (this.app as any).openWithDefaultApp(this.bibFilePath);
-                new Notice(`Opened ${this.bibFilePath} — entry at line ${this.lineNumber + 1}`);
-            }, 0);
-        });
+        for (let i = 0; i < this.parts.length; i++) {
+            if (i > 0) {
+                wrapper.appendChild(document.createTextNode("; "));
+            }
 
-        return span;
+            const part = this.parts[i];
+            const partSpan = document.createElement("span");
+            partSpan.className = "turboref-citeproc-part";
+            partSpan.textContent = part.rendered;
+            partSpan.style.cursor = "pointer";
+
+            partSpan.addEventListener("mousedown", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setTimeout(() => {
+                    openBibFileAtLine(this.adapter, part.bibFile, part.lineNumber, this.editorCommand);
+                }, 0);
+            });
+
+            wrapper.appendChild(partSpan);
+        }
+
+        return wrapper;
     }
 
     eq(other: CiteprocWidget): boolean {
         return (
             this.original === other.original &&
-            this.renderedText === other.renderedText &&
+            this.parts.length === other.parts.length &&
+            this.parts.every((p, i) =>
+                p.rendered === other.parts[i].rendered &&
+                p.bibFile === other.parts[i].bibFile &&
+                p.lineNumber === other.parts[i].lineNumber
+            ) &&
             this.charStart === other.charStart &&
-            this.charEnd === other.charEnd &&
-            this.bibFilePath === other.bibFilePath
+            this.charEnd === other.charEnd
         );
     }
 }

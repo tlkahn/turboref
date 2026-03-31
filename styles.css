@@ -56,8 +56,8 @@
     border: 1px dotted var(--text-accent);
 }
 
-.turboref-citeproc:hover {
-    opacity: 0.8;
+.turboref-citeproc-part:hover {
+    text-decoration: underline;
 }
 
 /* Highlight blink animation for navigation targets */
