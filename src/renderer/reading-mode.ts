@@ -21,10 +21,6 @@ export function createPostProcessor(plugin: TurboRefPlugin) {
         const frontmatter = cache?.frontmatter;
         const configJson = buildDocumentConfigJson(plugin.settings, frontmatter);
 
-        // We need the full file content for parsing — read from cache or section info
-        const sectionInfo = ctx.getSectionInfo(el);
-        if (!sectionInfo) return;
-
         plugin.app.vault.cachedRead(file).then((content) => {
             try {
                 const resolved = plugin.bridge.resolveCitations(content, configJson);
@@ -183,7 +179,7 @@ interface CiteprocReplacement {
  * Walk text nodes and replace [@barekey] citeproc citations with styled spans.
  * Each key in a batch citation gets its own clickable span.
  */
-function replaceCiteprocInDom(
+export function replaceCiteprocInDom(
     el: HTMLElement,
     crossrefOriginals: Set<string>,
     plugin: TurboRefPlugin,

@@ -141,6 +141,8 @@ Obsidian `MarkdownPostProcessor`. On each section render:
 3. TreeWalker finds `[@...]` text nodes → replaces with styled `<span class="turboref-citation">`
 4. Second pass removes `{#type:id}` definition markers from visible text
 
+**Callouts and `ctx.getSectionInfo()`** — Early versions guarded the post-processor with `if (!ctx.getSectionInfo(el)) return;` as a sanity check. This silently broke rendering inside Obsidian callouts (`> [!important] ...`), because `getSectionInfo` returns `null` for callout elements — callouts are transformed block-level wrappers that don't map to a single source section. The guard was dead code: `sectionInfo` was never read afterward, and file content is obtained independently via `vault.cachedRead(file)`. Removing the guard fixed callout rendering while the downstream TreeWalker+regex remains idempotent for non-matching text. Live mode was never affected — it operates on raw document text at character offsets, independent of the DOM tree.
+
 ### Live Mode (`renderer/live-mode.ts`)
 
 CodeMirror 6 `EditorView.decorations.compute(["doc", "selection"])`:
@@ -294,7 +296,19 @@ The plugin exposes `currentBibEntries: BibEntry[]` and `bibRenderedForms: Map<st
 
 166 Rust unit tests in `crates/core`, run via `cargo test -p turboref-core`. No WASM or browser required — the core crate is pure Rust with zero platform dependencies.
 
-53 TypeScript unit tests in `src/bib/__tests__/`, run via `npx vitest run`.
+60 TypeScript unit tests in `src/**/__tests__/`, run via `npx vitest run`.
+
+### DOM Tests and the `obsidian` Import
+
+Vitest tests that exercise renderer code need to import from modules that themselves `import { ... } from "obsidian"`. The `obsidian` package is only available at runtime inside the Obsidian host app, so we alias it to a minimal mock in `vitest.config.ts`:
+
+```ts
+resolve: { alias: { obsidian: path.resolve(__dirname, "src/__mocks__/obsidian.ts") } }
+```
+
+`src/__mocks__/obsidian.ts` exports empty `FileSystemAdapter`, `TFile`, `MarkdownView`, `Plugin`, `Notice`, `MarkdownPostProcessorContext` classes — enough for `import` and `instanceof` checks to resolve without pulling in the real API.
+
+DOM tests use jsdom via the per-file directive `// @vitest-environment jsdom` on the first line (no global vitest config change needed). The renderer function under test is exported directly (e.g. `export function replaceCiteprocInDom`) and called with a hand-built DOM tree plus a minimally stubbed plugin object — only the fields actually read (`currentBibEntries`, `bibRenderedForms`, `app.vault.adapter`, `settings.bibEditorCommand`) are populated. Click handlers only bind when `adapter instanceof FileSystemAdapter`, so tests pass a plain `{}` adapter to skip that path.
 
 | Module | Tests |
 |--------|-------|
@@ -318,3 +332,4 @@ The plugin exposes `currentBibEntries: BibEntry[]` and `bibRenderedForms: Map<st
 | bib/parser | 21 |
 | bib/renderer | 23 |
 | bib/resolver | 9 |
+| renderer/reading-mode (DOM) | 7 |

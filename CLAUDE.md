@@ -12,7 +12,7 @@ Supports 5 crossref types: `fig`, `tbl`, `sec`, `eq`, `lst` — plus trait-based
 
 ```bash
 cargo test -p turboref-core          # Run 166 Rust unit tests
-npx vitest run                       # Run 53 TypeScript unit tests (bib parser/renderer/resolver)
+npx vitest run                       # Run 60 TypeScript unit tests (bib parser/renderer/resolver + reading-mode DOM)
 npm test                             # Run both Rust + TypeScript tests
 wasm-pack build crates/wasm --target web --release   # Build WASM
 node esbuild.config.mjs production   # Bundle TypeScript
@@ -48,6 +48,7 @@ Document content + config JSON
 - **`getrandom` with `js` feature** in the wasm crate for `rand` support on WASM targets.
 - **`wasm-opt = false`** in Cargo.toml (wasm-pack's bundled binary doesn't support Apple Silicon). System `wasm-opt` run separately in `install.sh`.
 - **Bib click-to-navigate via login shell**: External editor commands are run through `$SHELL -l -c` (not `/bin/sh`) because Electron apps launched from Finder don't inherit the terminal's PATH. Configurable via `bibEditorCommand` setting (default: `subl {file}:{line}`).
+- **No `ctx.getSectionInfo()` guard in reading mode**: `ctx.getSectionInfo(el)` returns `null` for callout elements (`> [!note] ...`), which previously caused the entire post-processor to bail and left citations unrendered inside callouts. The guard was dead code (`sectionInfo` was never used downstream) and has been removed — see `src/renderer/reading-mode.ts`. Do not reintroduce it.
 
 ### Parser Extensibility
 
@@ -97,9 +98,12 @@ src/
   suggest.ts       # EditorSuggest for [@... autocompletion (crossref types + bib keys)
   settings.ts      # Settings UI tab (incl. citeproc + Redis settings)
   renderer/
-    reading-mode.ts  # MarkdownPostProcessor (crossref + citeproc passes)
+    reading-mode.ts  # MarkdownPostProcessor (crossref + citeproc passes); renders inside callouts
     live-mode.ts     # CodeMirror 6 decorations (crossref + citeproc passes)
     widgets.ts       # CrossrefWidget, DefinitionWidget, CiteprocWidget (per-part click nav)
+    __tests__/       # vitest DOM tests (jsdom via `// @vitest-environment jsdom` directive)
+  __mocks__/
+    obsidian.ts      # Minimal stub for `import "obsidian"` in vitest (aliased in vitest.config.ts)
   bib/
     types.ts       # BibEntry interface
     parser.ts      # BibTeX file parser

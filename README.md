@@ -10,7 +10,7 @@ Built with a **Rust/WASM core** for fast, reliable parsing and a TypeScript UI l
 - **Citeproc bibliography support**: auto-complete and render bibliographic citations from `.bib` files — type `[@bib:` to search entries, rendered as "Author Year" inline. Supports `[-@key]` to suppress the author and show only the year, and locator suffixes like `[@key, ch. 11]` or `[@key, pp. 45-50]`
 - **Live editing preview**: both citations (`[@fig:cat]` → "Fig. 1") and definition tags (`{#fig:cat}` → "#Fig. 1") render inline, expanding when your cursor enters them
 - **Click-to-navigate**: click a crossref citation to scroll to its definition; click a bib citation to open the `.bib` file in your default editor
-- **Reading mode rendering**: full cross-reference and citeproc resolution in preview
+- **Reading mode rendering**: full cross-reference and citeproc resolution in preview, including inside Obsidian callouts (`> [!note] ...`)
 - **Auto-completion**: type `[@` to get suggestions for all defined references and bibliography entries
 - **Batch references**: `[@fig:a;@fig:b;@fig:c]` renders as "Figs. 1-3" (consecutive range detection)
 - **Sub-figures**: group consecutive images with a caption line for letter-suffixed numbering (1a, 1b, ...)
@@ -165,7 +165,7 @@ npm test
 # Run Rust tests only (166 unit tests)
 cargo test -p turboref-core
 
-# Run TypeScript tests only (53 unit tests — bib parser, renderer, resolver)
+# Run TypeScript tests only (60 unit tests — bib parser/renderer/resolver + reading-mode DOM)
 npx vitest run
 
 # Build WASM
@@ -201,7 +201,7 @@ TurboRef separates concerns into two layers:
 
 - **Rust core** (`crates/core`): All crossref parsing, numbering, reference resolution, and text rendering. Compiled to WebAssembly. 166 unit tests.
 - **TypeScript shell** (`src/`): Obsidian plugin lifecycle, CodeMirror 6 live decorations, DOM post-processing, auto-completion, event listeners, settings UI.
-- **Bib pipeline** (`src/bib/`): TypeScript-only citeproc support — BibTeX parsing, "Author Year" rendering with disambiguation, `[-@key]` author-suppression, locator suffixes (`[@key, ch. 11]`), frontmatter path resolution, in-memory/Redis caching. 53 unit tests.
+- **Bib pipeline** (`src/bib/`): TypeScript-only citeproc support — BibTeX parsing, "Author Year" rendering with disambiguation, `[-@key]` author-suppression, locator suffixes (`[@key, ch. 11]`), frontmatter path resolution, in-memory/Redis caching. 60 unit tests (incl. reading-mode DOM tests).
 
 The WASM boundary uses stateless JSON calls — the TypeScript side sends document content + config, gets back resolved references. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 
