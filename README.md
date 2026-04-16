@@ -7,7 +7,7 @@ Built with a **Rust/WASM core** for fast, reliable parsing and a TypeScript UI l
 ## Features
 
 - **All pandoc-crossref types**: figures, tables, sections, equations, code listings
-- **Citeproc bibliography support**: auto-complete and render bibliographic citations from `.bib` files — type `[@bib:` to search entries, rendered as "Author Year" inline
+- **Citeproc bibliography support**: auto-complete and render bibliographic citations from `.bib` files — type `[@bib:` to search entries, rendered as "Author Year" inline. Supports `[-@key]` to suppress the author and show only the year
 - **Live editing preview**: both citations (`[@fig:cat]` → "Fig. 1") and definition tags (`{#fig:cat}` → "#Fig. 1") render inline, expanding when your cursor enters them
 - **Click-to-navigate**: click a crossref citation to scroll to its definition; click a bib citation to open the `.bib` file in your default editor
 - **Reading mode rendering**: full cross-reference and citeproc resolution in preview
@@ -117,6 +117,8 @@ bibliography:
 ```markdown
 [@sanderson2009]                    → "Sanderson 2009"
 [@sanderson2009; @flood1996]        → "Sanderson 2009; Flood 1996"
+[-@sanderson2009]                   → "2009"  (author suppressed)
+[@flood1996; -@sanderson2009]       → "Flood 1996; 2009"
 ```
 
 **Rendered form**: citations display as "Author Year" when the cursor is outside:
@@ -124,6 +126,7 @@ bibliography:
 - Two authors: "Sanderson & Jordan 2009"
 - Three+: "Sanderson et al. 2009"
 - Same author+year disambiguation: "Sanderson 2009a", "Sanderson 2009b"
+- Author-suppressed (`[-@key]`): "2009" (year only, or "n.d." if no year)
 
 **Click navigation**: clicking a rendered bib citation opens the `.bib` file in your system's default text editor, with a notification showing the entry's line number.
 
@@ -158,7 +161,7 @@ npm test
 # Run Rust tests only (166 unit tests)
 cargo test -p turboref-core
 
-# Run TypeScript tests only (43 unit tests — bib parser, renderer, resolver)
+# Run TypeScript tests only (46 unit tests — bib parser, renderer, resolver)
 npx vitest run
 
 # Build WASM
@@ -194,7 +197,7 @@ TurboRef separates concerns into two layers:
 
 - **Rust core** (`crates/core`): All crossref parsing, numbering, reference resolution, and text rendering. Compiled to WebAssembly. 166 unit tests.
 - **TypeScript shell** (`src/`): Obsidian plugin lifecycle, CodeMirror 6 live decorations, DOM post-processing, auto-completion, event listeners, settings UI.
-- **Bib pipeline** (`src/bib/`): TypeScript-only citeproc support — BibTeX parsing, "Author Year" rendering with disambiguation, frontmatter path resolution, in-memory/Redis caching. 43 unit tests.
+- **Bib pipeline** (`src/bib/`): TypeScript-only citeproc support — BibTeX parsing, "Author Year" rendering with disambiguation, `[-@key]` author-suppression, frontmatter path resolution, in-memory/Redis caching. 46 unit tests.
 
 The WASM boundary uses stateless JSON calls — the TypeScript side sends document content + config, gets back resolved references. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 

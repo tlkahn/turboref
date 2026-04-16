@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TurboRef is an Obsidian plugin for pandoc-crossref-compatible cross-referencing. It has a **Rust/WASM core** for all parsing and resolution logic, and a **TypeScript UI layer** for Obsidian integration.
 
-Supports 5 crossref types: `fig`, `tbl`, `sec`, `eq`, `lst` — plus trait-based extensibility for custom types. Also supports **citeproc** bibliographic citations from `.bib` files (parsed and rendered on the TypeScript side).
+Supports 5 crossref types: `fig`, `tbl`, `sec`, `eq`, `lst` — plus trait-based extensibility for custom types. Also supports **citeproc** bibliographic citations from `.bib` files (parsed and rendered on the TypeScript side), including `[-@key]` author-suppression syntax.
 
 ## Build Commands
 
 ```bash
 cargo test -p turboref-core          # Run 166 Rust unit tests
-npx vitest run                       # Run 43 TypeScript unit tests (bib parser/renderer/resolver)
+npx vitest run                       # Run 46 TypeScript unit tests (bib parser/renderer/resolver)
 npm test                             # Run both Rust + TypeScript tests
 wasm-pack build crates/wasm --target web --release   # Build WASM
 node esbuild.config.mjs production   # Bundle TypeScript
@@ -27,7 +27,7 @@ Two-crate Rust workspace + TypeScript:
 - **`crates/core`** — Pure Rust library (zero WASM deps). All parsing, numbering, citation resolution, rendering, template expansion. This is the TDD target.
 - **`crates/wasm`** — Thin `wasm-bindgen` wrapper. Exports 5 functions (`parse_document`, `resolve_citations`, `get_definitions`, `resolve_all_decorations`, `expand_template`), JSON in/out. `ResolvedCitation` includes `target_line`/`target_char_offset` for click-to-navigate.
 - **`src/`** — TypeScript. Obsidian plugin lifecycle, CodeMirror 6 live rendering, MarkdownPostProcessor for reading mode, EditorSuggest for `[@` completion, image/table event listeners, settings UI. Clicking a citation navigates to the definition with a highlight blink.
-- **`src/bib/`** — TypeScript-only citeproc pipeline. BibTeX parser, "Author Year" renderer with disambiguation, frontmatter `bibliography` path resolver, in-memory/Redis cache. No Rust involvement — bib entries are external data, not in-document definitions.
+- **`src/bib/`** — TypeScript-only citeproc pipeline. BibTeX parser, "Author Year" renderer with disambiguation (+ year-only for `[-@key]`), frontmatter `bibliography` path resolver, in-memory/Redis cache. No Rust involvement — bib entries are external data, not in-document definitions.
 
 ### Data Flow
 
@@ -103,7 +103,7 @@ src/
   bib/
     types.ts       # BibEntry interface
     parser.ts      # BibTeX file parser
-    renderer.ts    # "Author Year" formatter with disambiguation
+    renderer.ts    # "Author Year" formatter with disambiguation + year-only for [-@key]
     resolver.ts    # Frontmatter bibliography path resolution
     cache.ts       # MemoryBibCache (default) + RedisBibCache (opt-in)
     open-external.ts # Open .bib file at line via configurable editor command ($SHELL -l -c)

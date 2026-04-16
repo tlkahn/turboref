@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderBibCitation, renderBibCitations } from "../renderer";
+import { renderBibCitation, renderBibCitations, renderBibCitationYearOnly } from "../renderer";
 import type { BibEntry } from "../types";
 
 function entry(overrides: Partial<BibEntry> & { key: string }): BibEntry {
@@ -56,6 +56,23 @@ describe("renderBibCitation (single entry, no disambiguation)", () => {
     it("falls back to raw key when no author and no year", () => {
         const e = entry({ key: "mystery" });
         expect(renderBibCitation(e)).toBe("mystery");
+    });
+});
+
+describe("renderBibCitationYearOnly (author-suppressed)", () => {
+    it("returns year when present", () => {
+        const e = entry({ key: "bush1945", authors: ["Bush, Vannevar"], year: "1945" });
+        expect(renderBibCitationYearOnly(e)).toBe("1945");
+    });
+
+    it("returns n.d. when year is empty", () => {
+        const e = entry({ key: "noyr", authors: ["Smith, John"], year: "" });
+        expect(renderBibCitationYearOnly(e)).toBe("n.d.");
+    });
+
+    it("ignores author completely", () => {
+        const e = entry({ key: "multi", authors: ["A, B", "C, D", "E, F"], year: "2020" });
+        expect(renderBibCitationYearOnly(e)).toBe("2020");
     });
 });
 

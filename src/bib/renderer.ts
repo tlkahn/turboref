@@ -42,6 +42,13 @@ export function renderBibCitations(entries: BibEntry[]): Map<string, string> {
     return result;
 }
 
+/**
+ * Render a bib citation with author suppressed — year only (for [-@key] syntax).
+ */
+export function renderBibCitationYearOnly(entry: BibEntry): string {
+    return entry.year || "n.d.";
+}
+
 function extractLastName(authors: string[]): string | null {
     if (authors.length === 0) return null;
 

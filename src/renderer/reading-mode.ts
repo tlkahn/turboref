@@ -2,6 +2,7 @@ import { FileSystemAdapter, MarkdownPostProcessorContext, MarkdownView, TFile } 
 import type TurboRefPlugin from "../main";
 import { buildDocumentConfigJson } from "../config";
 import { openBibFileAtLine } from "../bib/open-external";
+import { renderBibCitationYearOnly } from "../bib/renderer";
 
 // Regex to find definition markers in rendered text
 const DEF_MARKER_RE = /\s*\{#(?:fig|tbl|sec|eq|lst):[^}]+\}/g;
@@ -196,7 +197,7 @@ function replaceCiteprocInDom(
         const text = node.textContent || "";
         const replacements: CiteprocReplacement[] = [];
 
-        const citeprocRe = /\[@([a-zA-Z][\w.\-]*(?:\s*;\s*@?[a-zA-Z][\w.\-]*)*)\]/g;
+        const citeprocRe = /\[(-?@[a-zA-Z][\w.\-]*(?:\s*;\s*-?@?[a-zA-Z][\w.\-]*)*)\]/g;
         let match;
         while ((match = citeprocRe.exec(text)) !== null) {
             const original = match[0];
@@ -205,14 +206,17 @@ function replaceCiteprocInDom(
             if (crossrefOriginals.has(original)) continue;
             if (inner.includes(":")) continue;
 
-            const keys = inner.split(/\s*;\s*/).map((k) => k.replace(/^@/, ""));
+            const keyParts = inner.split(/\s*;\s*/).map((k) => {
+                const suppress = k.startsWith("-");
+                return { key: k.replace(/^-?@?/, ""), suppress };
+            });
             const parts: { rendered: string; bibFile: string; lineNumber: number }[] = [];
 
-            for (const key of keys) {
+            for (const { key, suppress } of keyParts) {
                 const bibEntry = plugin.currentBibEntries?.find((e) => e.key === key);
                 parts.push({
                     rendered: bibEntry
-                        ? (plugin.bibRenderedForms?.get(key) ?? key)
+                        ? (suppress ? renderBibCitationYearOnly(bibEntry) : (plugin.bibRenderedForms?.get(key) ?? key))
                         : key,
                     bibFile: bibEntry?.bibFile ?? "",
                     lineNumber: bibEntry?.lineNumber ?? 0,

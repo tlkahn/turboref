@@ -218,6 +218,8 @@ Formats citations as "Author Year" with disambiguation:
 
 `renderBibCitations()` takes all entries, groups by base rendered form, and assigns letter suffixes only where disambiguation is needed.
 
+**Author-suppressed rendering** (`renderBibCitationYearOnly`): returns only the year (or "n.d." if absent). Used when a cite key is prefixed with `-` in the `[-@key]` syntax. This function bypasses `extractLastName()` entirely — the author field is never consulted.
+
 ### Path Resolution (`src/bib/resolver.ts`)
 
 `extractBibliographyField()` reads the `bibliography` frontmatter field (string or array). `resolveBibPaths()` resolves each path relative to the note's directory (standard Pandoc behavior), handling `..` segments.
@@ -243,6 +245,18 @@ The `bib:` prefix is only a completion trigger — the document stores valid pan
 ### Rendering Detection
 
 Since the document contains `[@sanderson2009]` (no colon), the renderer identifies citeproc citations as `[@key]` patterns where the key has no colon and was not matched by the Rust crossref pipeline. Both live mode and reading mode perform a second pass after crossref rendering to catch these.
+
+### Author-Suppression Syntax (`[-@key]`)
+
+Pandoc-citeproc's `[-@key]` suppresses the author name and renders only the year. Implementation touches the citeproc regex and key-processing logic in both renderers — the Rust crossref pipeline is unaffected (it requires a colon in the key).
+
+**Regex change**: The citeproc regex was extended from `\[@...` to `\[(-?@...` so the captured group includes the optional leading `-`. The `-?` is applied both to the first key and to subsequent keys in a batch (after `;`), enabling mixed batches like `[@smith2020; -@bush1945]`.
+
+**Per-key suppress flag**: After splitting on `;`, each key part is checked for a leading `-`. The strip regex changed from `/^@/` to `/^-?@?/` to remove both the optional `-` and `@` prefix. A `{ key, suppress }` object replaces the plain string.
+
+**Rendering dispatch**: When `suppress` is true, `renderBibCitationYearOnly(bibEntry)` is called instead of looking up `plugin.bibRenderedForms`. This avoids touching the disambiguation map — the year-only form has no author component and thus no disambiguation suffix.
+
+**Duplication note**: The key-parsing logic (split → detect suppress → strip prefix) is 3 lines, duplicated between `reading-mode.ts` and `live-mode.ts`. Kept inline because the two renderers produce different output types (`{ rendered, bibFile, lineNumber }` vs `CiteprocPart`) and extracting a shared helper would require a generic interface for minimal benefit.
 
 ### Click Navigation
 
@@ -270,7 +284,7 @@ The plugin exposes `currentBibEntries: BibEntry[]` and `bibRenderedForms: Map<st
 
 166 Rust unit tests in `crates/core`, run via `cargo test -p turboref-core`. No WASM or browser required — the core crate is pure Rust with zero platform dependencies.
 
-43 TypeScript unit tests in `src/bib/__tests__/`, run via `npx vitest run`.
+46 TypeScript unit tests in `src/bib/__tests__/`, run via `npx vitest run`.
 
 | Module | Tests |
 |--------|-------|
@@ -292,5 +306,5 @@ The plugin exposes `currentBibEntries: BibEntry[]` and `bibRenderedForms: Map<st
 | resolver | 2 |
 | **TypeScript** | |
 | bib/parser | 21 |
-| bib/renderer | 13 |
+| bib/renderer | 16 |
 | bib/resolver | 9 |

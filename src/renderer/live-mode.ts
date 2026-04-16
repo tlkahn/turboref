@@ -3,6 +3,7 @@ import { Extension, RangeSetBuilder } from "@codemirror/state";
 import type TurboRefPlugin from "../main";
 import { buildDocumentConfigJson } from "../config";
 import { CrossrefWidget, DefinitionWidget, CiteprocWidget, CiteprocPart } from "./widgets";
+import { renderBibCitationYearOnly } from "../bib/renderer";
 
 /**
  * Creates CodeMirror 6 extensions for live cross-reference rendering in editing mode.
@@ -96,7 +97,7 @@ function createDecorationExtension(plugin: TurboRefPlugin): Extension {
             // Citeproc citation pass: find [@barekey] patterns not matched by crossref
             if (plugin.settings.enableCiteprocRendering && plugin.currentBibEntries?.length) {
                 const crossrefOriginals = new Set(all.citations.map((c: any) => c.original));
-                const bibRe = /\[@([a-zA-Z][\w.\-]*(?:\s*;\s*@?[a-zA-Z][\w.\-]*)*)\]/g;
+                const bibRe = /\[(-?@[a-zA-Z][\w.\-]*(?:\s*;\s*-?@?[a-zA-Z][\w.\-]*)*)\]/g;
                 let bibMatch;
 
                 while ((bibMatch = bibRe.exec(content)) !== null) {
@@ -114,14 +115,17 @@ function createDecorationExtension(plugin: TurboRefPlugin): Extension {
                     if (start < 0 || end > state.doc.length || start >= end) continue;
 
                     // Look up each key in the bib entries
-                    const keys = inner.split(/\s*;\s*/).map((k: string) => k.replace(/^@/, ""));
+                    const keyParts = inner.split(/\s*;\s*/).map((k: string) => {
+                        const suppress = k.startsWith("-");
+                        return { key: k.replace(/^-?@?/, ""), suppress };
+                    });
                     const parts: CiteprocPart[] = [];
 
-                    for (const key of keys) {
+                    for (const { key, suppress } of keyParts) {
                         const bibEntry = plugin.currentBibEntries.find((e) => e.key === key);
                         parts.push({
                             rendered: bibEntry
-                                ? (plugin.bibRenderedForms?.get(key) ?? key)
+                                ? (suppress ? renderBibCitationYearOnly(bibEntry) : (plugin.bibRenderedForms?.get(key) ?? key))
                                 : key,
                             bibFile: bibEntry?.bibFile ?? "",
                             lineNumber: bibEntry?.lineNumber ?? 0,
