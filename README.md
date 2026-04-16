@@ -7,7 +7,7 @@ Built with a **Rust/WASM core** for fast, reliable parsing and a TypeScript UI l
 ## Features
 
 - **All pandoc-crossref types**: figures, tables, sections, equations, code listings
-- **Citeproc bibliography support**: auto-complete and render bibliographic citations from `.bib` files — type `[@bib:` to search entries, rendered as "Author Year" inline. Supports `[-@key]` to suppress the author and show only the year
+- **Citeproc bibliography support**: auto-complete and render bibliographic citations from `.bib` files — type `[@bib:` to search entries, rendered as "Author Year" inline. Supports `[-@key]` to suppress the author and show only the year, and locator suffixes like `[@key, ch. 11]` or `[@key, pp. 45-50]`
 - **Live editing preview**: both citations (`[@fig:cat]` → "Fig. 1") and definition tags (`{#fig:cat}` → "#Fig. 1") render inline, expanding when your cursor enters them
 - **Click-to-navigate**: click a crossref citation to scroll to its definition; click a bib citation to open the `.bib` file in your default editor
 - **Reading mode rendering**: full cross-reference and citeproc resolution in preview
@@ -119,6 +119,10 @@ bibliography:
 [@sanderson2009; @flood1996]        → "Sanderson 2009; Flood 1996"
 [-@sanderson2009]                   → "2009"  (author suppressed)
 [@flood1996; -@sanderson2009]       → "Flood 1996; 2009"
+[@newman2018, ch. 11]              → "Newman 2018, ch. 11"  (locator)
+[@newman2018, pp. 45-50]           → "Newman 2018, pp. 45-50"
+[@smith2020, ch. 3; @jones2021]    → "Smith 2020, ch. 3; Jones 2021"
+[-@bush1945, ch. 5]                → "1945, ch. 5"  (suppressed + locator)
 ```
 
 **Rendered form**: citations display as "Author Year" when the cursor is outside:
@@ -161,7 +165,7 @@ npm test
 # Run Rust tests only (166 unit tests)
 cargo test -p turboref-core
 
-# Run TypeScript tests only (46 unit tests — bib parser, renderer, resolver)
+# Run TypeScript tests only (53 unit tests — bib parser, renderer, resolver)
 npx vitest run
 
 # Build WASM
@@ -197,7 +201,7 @@ TurboRef separates concerns into two layers:
 
 - **Rust core** (`crates/core`): All crossref parsing, numbering, reference resolution, and text rendering. Compiled to WebAssembly. 166 unit tests.
 - **TypeScript shell** (`src/`): Obsidian plugin lifecycle, CodeMirror 6 live decorations, DOM post-processing, auto-completion, event listeners, settings UI.
-- **Bib pipeline** (`src/bib/`): TypeScript-only citeproc support — BibTeX parsing, "Author Year" rendering with disambiguation, `[-@key]` author-suppression, frontmatter path resolution, in-memory/Redis caching. 46 unit tests.
+- **Bib pipeline** (`src/bib/`): TypeScript-only citeproc support — BibTeX parsing, "Author Year" rendering with disambiguation, `[-@key]` author-suppression, locator suffixes (`[@key, ch. 11]`), frontmatter path resolution, in-memory/Redis caching. 53 unit tests.
 
 The WASM boundary uses stateless JSON calls — the TypeScript side sends document content + config, gets back resolved references. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 

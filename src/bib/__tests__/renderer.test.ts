@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderBibCitation, renderBibCitations, renderBibCitationYearOnly } from "../renderer";
+import { renderBibCitation, renderBibCitations, renderBibCitationYearOnly, parseCiteprocKeys } from "../renderer";
 import type { BibEntry } from "../types";
 
 function entry(overrides: Partial<BibEntry> & { key: string }): BibEntry {
@@ -73,6 +73,52 @@ describe("renderBibCitationYearOnly (author-suppressed)", () => {
     it("ignores author completely", () => {
         const e = entry({ key: "multi", authors: ["A, B", "C, D", "E, F"], year: "2020" });
         expect(renderBibCitationYearOnly(e)).toBe("2020");
+    });
+});
+
+describe("parseCiteprocKeys", () => {
+    it("parses single key without locator", () => {
+        expect(parseCiteprocKeys("@newman2018")).toEqual([
+            { key: "newman2018", suppress: false, locator: "" },
+        ]);
+    });
+
+    it("parses single key with chapter locator", () => {
+        expect(parseCiteprocKeys("@newman2018networks, ch. 11")).toEqual([
+            { key: "newman2018networks", suppress: false, locator: "ch. 11" },
+        ]);
+    });
+
+    it("parses suppressed key with locator", () => {
+        expect(parseCiteprocKeys("-@bush1945, ch. 5")).toEqual([
+            { key: "bush1945", suppress: true, locator: "ch. 5" },
+        ]);
+    });
+
+    it("parses batch with mixed locators", () => {
+        expect(parseCiteprocKeys("@smith2020, ch. 3; @jones2021")).toEqual([
+            { key: "smith2020", suppress: false, locator: "ch. 3" },
+            { key: "jones2021", suppress: false, locator: "" },
+        ]);
+    });
+
+    it("parses page locator", () => {
+        expect(parseCiteprocKeys("@smith2020, pp. 45-50")).toEqual([
+            { key: "smith2020", suppress: false, locator: "pp. 45-50" },
+        ]);
+    });
+
+    it("parses batch with all keys having locators", () => {
+        expect(parseCiteprocKeys("@smith2020, ch. 3; -@jones2021, pp. 10")).toEqual([
+            { key: "smith2020", suppress: false, locator: "ch. 3" },
+            { key: "jones2021", suppress: true, locator: "pp. 10" },
+        ]);
+    });
+
+    it("parses suppressed key without locator", () => {
+        expect(parseCiteprocKeys("-@bush1945")).toEqual([
+            { key: "bush1945", suppress: true, locator: "" },
+        ]);
     });
 });
 

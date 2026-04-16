@@ -49,6 +49,32 @@ export function renderBibCitationYearOnly(entry: BibEntry): string {
     return entry.year || "n.d.";
 }
 
+export interface CiteprocKeyPart {
+    key: string;
+    suppress: boolean;
+    locator: string;
+}
+
+/**
+ * Parse the inner text of a citeproc citation (between [ and ]).
+ * Handles locator suffixes like `, ch. 11` or `, pp. 45-50`.
+ */
+export function parseCiteprocKeys(inner: string): CiteprocKeyPart[] {
+    return inner.split(/\s*;\s*/).map((k) => {
+        const suppress = k.startsWith("-");
+        const stripped = k.replace(/^-?@?/, "");
+        const commaIdx = stripped.indexOf(",");
+        if (commaIdx >= 0) {
+            return {
+                key: stripped.slice(0, commaIdx).trim(),
+                suppress,
+                locator: stripped.slice(commaIdx + 1).trim(),
+            };
+        }
+        return { key: stripped.trim(), suppress, locator: "" };
+    });
+}
+
 function extractLastName(authors: string[]): string | null {
     if (authors.length === 0) return null;
 

@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TurboRef is an Obsidian plugin for pandoc-crossref-compatible cross-referencing. It has a **Rust/WASM core** for all parsing and resolution logic, and a **TypeScript UI layer** for Obsidian integration.
 
-Supports 5 crossref types: `fig`, `tbl`, `sec`, `eq`, `lst` — plus trait-based extensibility for custom types. Also supports **citeproc** bibliographic citations from `.bib` files (parsed and rendered on the TypeScript side), including `[-@key]` author-suppression syntax.
+Supports 5 crossref types: `fig`, `tbl`, `sec`, `eq`, `lst` — plus trait-based extensibility for custom types. Also supports **citeproc** bibliographic citations from `.bib` files (parsed and rendered on the TypeScript side), including `[-@key]` author-suppression syntax and locator suffixes (`[@key, ch. 11]`, `[@key, pp. 45-50]`).
 
 ## Build Commands
 
 ```bash
 cargo test -p turboref-core          # Run 166 Rust unit tests
-npx vitest run                       # Run 46 TypeScript unit tests (bib parser/renderer/resolver)
+npx vitest run                       # Run 53 TypeScript unit tests (bib parser/renderer/resolver)
 npm test                             # Run both Rust + TypeScript tests
 wasm-pack build crates/wasm --target web --release   # Build WASM
 node esbuild.config.mjs production   # Bundle TypeScript
@@ -103,7 +103,7 @@ src/
   bib/
     types.ts       # BibEntry interface
     parser.ts      # BibTeX file parser
-    renderer.ts    # "Author Year" formatter with disambiguation + year-only for [-@key]
+    renderer.ts    # "Author Year" formatter with disambiguation, year-only for [-@key], parseCiteprocKeys() for locator extraction
     resolver.ts    # Frontmatter bibliography path resolution
     cache.ts       # MemoryBibCache (default) + RedisBibCache (opt-in)
     open-external.ts # Open .bib file at line via configurable editor command ($SHELL -l -c)

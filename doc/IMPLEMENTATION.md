@@ -256,7 +256,17 @@ Pandoc-citeproc's `[-@key]` suppresses the author name and renders only the year
 
 **Rendering dispatch**: When `suppress` is true, `renderBibCitationYearOnly(bibEntry)` is called instead of looking up `plugin.bibRenderedForms`. This avoids touching the disambiguation map — the year-only form has no author component and thus no disambiguation suffix.
 
-**Duplication note**: The key-parsing logic (split → detect suppress → strip prefix) is 3 lines, duplicated between `reading-mode.ts` and `live-mode.ts`. Kept inline because the two renderers produce different output types (`{ rendered, bibFile, lineNumber }` vs `CiteprocPart`) and extracting a shared helper would require a generic interface for minimal benefit.
+### Locator Syntax (`[@key, ch. 11]`, `[@key, pp. 45-50]`)
+
+Pandoc-citeproc supports locator suffixes like `[@newman2018networks, ch. 11]` which render as "Newman 2018, ch. 11". This required changes in three areas:
+
+**Shared parser** (`parseCiteprocKeys()` in `src/bib/renderer.ts`): Extracts `{ key, suppress, locator }` triples from the inner text of a citation bracket. After splitting on `;`, each part is checked for a leading `-` (suppression), then for a comma — everything after the first comma is the locator string. This replaced the 3 lines of duplicated key-parsing logic that was previously inline in both `reading-mode.ts` and `live-mode.ts`.
+
+**Regex extension**: The citeproc regex gained `(?:\s*,[^;\]]*)?` after each key — matching an optional comma followed by any characters except `;` or `]`. The key insight is that `;` separates keys in a batch and `]` closes the citation, so `[^;\]]*` captures exactly the locator text for one key without bleeding into the next key or outside the bracket. The old regex failed to match citations with locators at all, leaving them as unrendered plain text.
+
+**Rendering**: The locator is appended to the rendered form with a comma separator — `locator ? \`${base}, ${locator}\` : base`. The locator is baked into the `rendered` string before the widget sees it, so no changes were needed in `widgets.ts` (`CiteprocPart`/`CiteprocWidget`).
+
+**Crossref pipeline interaction**: The Rust crossref scanner matches `[@newman2018networks, ch. 11]` but silently drops it (no valid crossref refs found since the key has no colon). The `crossrefOriginals` set won't contain it, so it falls through to the citeproc pass. No Rust changes needed.
 
 ### Click Navigation
 
@@ -284,7 +294,7 @@ The plugin exposes `currentBibEntries: BibEntry[]` and `bibRenderedForms: Map<st
 
 166 Rust unit tests in `crates/core`, run via `cargo test -p turboref-core`. No WASM or browser required — the core crate is pure Rust with zero platform dependencies.
 
-46 TypeScript unit tests in `src/bib/__tests__/`, run via `npx vitest run`.
+53 TypeScript unit tests in `src/bib/__tests__/`, run via `npx vitest run`.
 
 | Module | Tests |
 |--------|-------|
@@ -306,5 +316,5 @@ The plugin exposes `currentBibEntries: BibEntry[]` and `bibRenderedForms: Map<st
 | resolver | 2 |
 | **TypeScript** | |
 | bib/parser | 21 |
-| bib/renderer | 16 |
+| bib/renderer | 23 |
 | bib/resolver | 9 |
